@@ -1,7 +1,13 @@
 # README
 
 ### Brief
-My second project in Rust. This might become a mini-language.
+My second ever project in Rust. This will become a mini-language called Loxie as a very small derivative of the educational Lox language.
+
+### Design
+ - Procedural & functional paradigm
+ - Static & strong typing + null safety
+ - First-class lambdas vs. declared procedures
+ - Built-in functions galore!
 
 ### Grammar
 ```
@@ -12,11 +18,14 @@ My second project in Rust. This might become a mini-language.
 
 ; exprs
 <atom> ::= <boolean> | <int> | <float> | <identifier> | <lambda> | (<compare>)
-<lambda> ::= "fun" <params> : <typename> <block>
+<lambda> ::= "fun" <params> ":" <typename> <block>
 <access> ::= <atom> ("." <atom>)*
 <unary> ::= <negate> | <increment> | <decrement>
+<negate> ::= "-" <access>
+<increment> ::= "++" <access>
+<decrement> ::= "--" <access>
 <factor> ::= <unary> (("*" | "/") <unary>)*
-<term> ::= <factor> (("*" | "/") <factor>)*
+<term> ::= <factor> (("+" | "-") <factor>)*
 <equality> ::= <term> (("==" | "!=") <term>)*
 <compare> ::= <equality> (("<" | ">") <equality>)*
 <assign> ::= <access> "=" <compare>
@@ -24,7 +33,7 @@ My second project in Rust. This might become a mini-language.
 ; statements
 <program> ::= <function-decl>*
 <function-decl> ::= "fun" <identifier> <params> : <typename> <block>
-<params> ::= "(" <param-decl>* ")"
+<params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
 <param-decl> ::= <identifier> ":" <typename>
 <block> ::= { <nestable>* }
 <nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt> | <exit>

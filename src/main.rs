@@ -4,18 +4,15 @@ use std::process::ExitCode;
 use std::collections::HashMap;
 use std::fs;
 
-use crate::frontend::token::TokenType;
-
 pub mod frontend;
+use crate::frontend::token::TokenType;
 
 const MIN_ARG_COUNT: usize = 1;
 const MAX_ARG_COUNT: usize = 2;
-
 const CONCH_VERSION_MAJOR: i32 = 0;
 const CONCH_VERSION_MINOR: i32 = 1;
 const CONCH_VERSION_PATCH: i32 = 0;
 
-/// TODO: I need a fucking constructor or macro AHHHHH
 fn main() -> ExitCode {
     let mut arg_list= env::args();
     let arg_count: usize = arg_list.len() - 1;
@@ -26,8 +23,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let first_arg = arg_list.nth(1);
-    let first_arg_str = first_arg.unwrap_or("".to_string());
+    let first_arg_str = arg_list.nth(1).unwrap_or(String::from(""));
 
     if first_arg_str == "--version" {
         println!("conchvm v.{}.{}.{}\nBy: DrkWithT (GitHub)", CONCH_VERSION_MAJOR, CONCH_VERSION_MINOR, CONCH_VERSION_PATCH);
@@ -99,7 +95,7 @@ fn main() -> ExitCode {
         let token_tag: TokenType = temp_token.tag.into();
 
         if token_tag == TokenType::Unknown.into() {
-            println!("BAD TOKEN LUL:\n{}", token_info_msg);
+            println!("Unknown token:\n{}", token_info_msg);
 
             return ExitCode::FAILURE;
         }

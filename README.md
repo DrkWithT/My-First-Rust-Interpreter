@@ -13,7 +13,7 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ```
 ; other
 <typename> ::= "bool" | "int" | "float" | <fun-type>
-<fun-type> ::= <typename> -> <typename>
+<fun-type> ::= <typename> (, <typename>)* -> <typename>
 <comment> ::= "#" ...
 
 ; exprs
@@ -45,3 +45,11 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <expr-stmt> ::= <assign>
 <exit> ::= "exit" <int>
 ```
+
+### Roadmap
+ - Add parser & AST
+ - Add naive bytecode generation
+ - Add VM
+ - Add simple checks for types and declarations
+ - Support strings
+ - Support first-class lambdas

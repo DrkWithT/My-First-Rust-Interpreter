@@ -66,6 +66,8 @@ fn main() -> ExitCode {
     lexical_items.insert("bool", TokenType::Typename);
     lexical_items.insert("int", TokenType::Typename);
     lexical_items.insert("float", TokenType::Typename);
+    lexical_items.insert("true", TokenType::LiteralBool);
+    lexical_items.insert("false", TokenType::LiteralBool);
     lexical_items.insert(".", TokenType::OpAccess);
     lexical_items.insert("++", TokenType::OpIncrement);
     lexical_items.insert("--", TokenType::OpDecrement);

@@ -1,0 +1,15 @@
+# primitive variables test
+
+fun main(): int {
+    let a: int = 21
+    let b: int = 21
+    let answer: int = a + b
+
+    let c: float = 2.5
+    let d: float = 4.5
+    let e: float = c + d
+
+    let ok: bool = true
+
+    return 0
+}

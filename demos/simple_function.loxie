@@ -1,0 +1,29 @@
+# non-recursive function test
+
+fun max(a: int, b: int): int {
+    if a > b {
+        return a
+    }
+
+    return b
+}
+
+fun average(x: int, y: int): int {
+    return (x + y) / 2
+}
+
+fun main(): int {
+    let answer_1: int = max(10, 20)
+
+    if answer_1 != 20 {
+        return 1
+    }
+
+    let answer_2: int = average(10, 20)
+
+    if answer_2 != 15 {
+        return 1
+    }
+
+    return 0
+}

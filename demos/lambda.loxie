@@ -1,0 +1,21 @@
+# lambda tests
+
+fun main(): int {
+    let foo: int -> bool = fun (x: int): bool {
+        return x > 0
+    }
+
+    if foo(42) {
+        return 0
+    }
+
+    let bar: int = (fun (): int {
+        return 100
+    })()
+
+    if bar != 100 {
+        return 1
+    }
+
+    return 0
+}

@@ -1,0 +1,20 @@
+# if / else testing
+
+fun main(): int {
+    let a: int = 1
+    let b: int = 2
+    let c: int = 3
+    let d: int = 7
+
+    if a + b == 3 {
+        a = 2
+    } else {
+        return 1
+    }
+
+    if a + b + c == d {
+        d = 0
+    }
+
+    return d
+}

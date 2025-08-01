@@ -19,7 +19,8 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ; exprs
 <atom> ::= <boolean> | <int> | <float> | <identifier> | <lambda> | (<compare>)
 <lambda> ::= "fun" <params> ":" <typename> <block>
-<access> ::= <atom> ("." <atom>)*
+<access> ::= <atom> ("." <atom>)* | <call>
+<call> ::= <atom> ( ( <compare> (, <compare>)* )? )
 <unary> ::= <negate> | <increment> | <decrement>
 <negate> ::= "-" <access>
 <increment> ::= "++" <access>

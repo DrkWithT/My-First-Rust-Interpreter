@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Path;
 use std::process::ExitCode;
 use std::collections::HashMap;
 use std::fs;
@@ -17,7 +18,7 @@ const CONCH_VERSION_PATCH: i32 = 0;
 /// TODO: I need a fucking constructor or macro AHHHHH
 fn main() -> ExitCode {
     let mut arg_list= env::args();
-    let arg_count: usize = arg_list.len();
+    let arg_count: usize = arg_list.len() - 1;
 
     if arg_count < MIN_ARG_COUNT || arg_count > MAX_ARG_COUNT {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
@@ -25,20 +26,29 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let first_arg = arg_list.nth(0);
+    let first_arg = arg_list.nth(1);
+    let first_arg_str = first_arg.unwrap_or("".to_string());
 
-    if first_arg == Some("--version".into()) {
+    if first_arg_str == "--version" {
         println!("conchvm v.{}.{}.{}\nBy: DrkWithT (GitHub)", CONCH_VERSION_MAJOR, CONCH_VERSION_MINOR, CONCH_VERSION_PATCH);
 
         return ExitCode::SUCCESS;
-    } else if first_arg == Some("--help".into()) {
-        println!("usage: ./conchvm [--help | --version | <file-name>]");
+    } else if first_arg_str == "--help" {
+        println!("usage: ./conchvm [help | version | <file-name>]");
 
         return ExitCode::SUCCESS;
     }
 
+    let first_arg_copy_str = first_arg_str.clone();
+    let source_path = Path::new(first_arg_copy_str.as_str());
+
+    if !source_path.exists() {
+        println!("Path not found: '{}'", source_path.to_str().expect(""));
+        return ExitCode::FAILURE;
+    }
+
     // todo: implement lexer and then use it here...
-    let source_text_opt = fs::read_to_string(first_arg.expect("Possibly missing argument #1 - expected path relative to launch path."));
+    let source_text_opt = fs::read_to_string(source_path);
 
     if source_text_opt.is_err() {
         println!("Failed to read file.");

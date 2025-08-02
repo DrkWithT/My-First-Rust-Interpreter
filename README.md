@@ -18,15 +18,16 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <comment> ::= "#" ...
 
 ; exprs
-<atom> ::= <boolean> | <int> | <float> | <array> | <lambda> | <identifier> | (<compare>)
+<atom> ::= <primitive> | <lambda> | (<compare>) | <array>
+<primitive> ::= <boolean> | <int> | <float> | <identifier>
 <array> ::= "[" ( <compare> ( "," <compare> )* )? "]"
 <lambda> ::= "fun" <params> ":" <typename> <block>
-<access> ::= <atom> ("." <atom>)* | <call>
-<call> ::= <atom> ( ( <compare> (, <compare>)* )? )
+<access> ::= <atom> ("." <atom>)*
+<call> ::= <access> ( ( <compare> (, <compare>)* )? )
 <unary> ::= <negate> | <increment> | <decrement>
-<negate> ::= "-" <access>
-<increment> ::= "++" <access>
-<decrement> ::= "--" <access>
+<negate> ::= "-"? <call>
+<increment> ::= "++"? <call>
+<decrement> ::= "--"? <call>
 <factor> ::= <unary> (("*" | "/") <unary>)*
 <term> ::= <factor> (("+" | "-") <factor>)*
 <equality> ::= <term> (("==" | "!=") <term>)*
@@ -34,21 +35,20 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <assign> ::= <access> "=" <compare>
 
 ; statements
-<program> ::= <function-decl>*
-<function-decl> ::= "fun" <identifier> <params> : <typename> <block>
-<params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
-<param-decl> ::= <identifier> ":" <typename>
-<block> ::= { <nestable>* }
-<nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt>
 <variable-decl> ::= "let" <identifier> ":" <typename> "=" <compare>
 <if> ::= "if" <compare> <block> (<else>)?
 <else> ::= "else" <block>
 <return> ::= "return" <compare>
 <expr-stmt> ::= <assign>
+<nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt>
+<block> ::= { <nestable>* }
+<function-decl> ::= "fun" <identifier> <params> : <typename> <block>
+<params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
+<param-decl> ::= <identifier> ":" <typename>
+<program> ::= <function-decl>*
 ```
 
 ### Roadmap
- - Add parser & AST
  - Add naive bytecode generation
  - Add VM
  - Add simple checks for types and declarations

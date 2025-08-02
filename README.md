@@ -32,14 +32,14 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <term> ::= <factor> (("+" | "-") <factor>)*
 <equality> ::= <term> (("==" | "!=") <term>)*
 <compare> ::= <equality> (("<" | ">") <equality>)*
-<assign> ::= <access> "=" <compare>
+<assign> ::= <access> ("=" <compare>)?
 
 ; statements
-<variable-decl> ::= "let" <identifier> ":" <typename> "=" <compare>
+<variable-decl> ::= "let" <identifier> ":" <typename> "=" <compare> ";"
 <if> ::= "if" <compare> <block> (<else>)?
 <else> ::= "else" <block>
-<return> ::= "return" <compare>
-<expr-stmt> ::= <assign>
+<return> ::= "return" <compare> ";"
+<expr-stmt> ::= <assign> ";"
 <nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt>
 <block> ::= { <nestable>* }
 <function-decl> ::= "fun" <identifier> <params> : <typename> <block>

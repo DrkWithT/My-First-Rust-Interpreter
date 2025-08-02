@@ -7,7 +7,8 @@ use std::fs;
 pub mod frontend;
 pub mod semantics;
 
-use crate::frontend::token::TokenType;
+use crate::frontend::token::*;
+use crate::frontend::parser::*;
 
 const MIN_ARG_COUNT: usize = 1;
 const MAX_ARG_COUNT: usize = 2;
@@ -21,7 +22,6 @@ fn main() -> ExitCode {
 
     if arg_count < MIN_ARG_COUNT || arg_count > MAX_ARG_COUNT {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
-
         return ExitCode::FAILURE;
     }
 
@@ -29,11 +29,9 @@ fn main() -> ExitCode {
 
     if first_arg_str == "--version" {
         println!("conchvm v.{}.{}.{}\nBy: DrkWithT (GitHub)", CONCH_VERSION_MAJOR, CONCH_VERSION_MINOR, CONCH_VERSION_PATCH);
-
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
-
         return ExitCode::SUCCESS;
     }
 
@@ -50,7 +48,6 @@ fn main() -> ExitCode {
 
     if source_text_opt.is_err() {
         println!("Failed to read file.");
-
         return ExitCode::FAILURE;
     }
 
@@ -82,24 +79,20 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let mut tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, 1, 1, 1);
+    let tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, 1, 1, 1);
+    let dud_token = token_from!(TokenType::Unknown, 0, 1, 1, 1);
+    let mut parser = Parser::new(tokenizer, dud_token, 0);
 
-    loop {
-        let temp_token = tokenizer.next();
-        let token_info_msg = temp_token.to_info_str();
+    let ast_opt = parser.parse_file();
 
-        let token_tag: TokenType = temp_token.tag.into();
-
-        if token_tag == TokenType::Unknown.into() {
-            println!("Unknown token:\n{}", token_info_msg);
-
-            return ExitCode::FAILURE;
-        }
-
-        if token_tag == TokenType::Eof.into() {
-            break;
-        }
+    if ast_opt.is_none() {
+        println!("Parsing failed, please see all errors above.");
+        return ExitCode::FAILURE;
     }
+
+    let ast_decls = ast_opt.unwrap();
+
+    println!("function declaration count: {}", ast_decls.len());
 
     ExitCode::SUCCESS
 }

@@ -1,0 +1,566 @@
+use crate::frontend::token::{Token, TokenType};
+use crate::frontend::lexer::Lexer;
+use crate::frontend::ast::*;
+use crate::semantics::types::*;
+
+pub type ASTDecls = Vec<Box<dyn Stmt>>;
+pub type ParseResult = Option<ASTDecls>;
+
+pub struct Parser {
+    tokenizer: Lexer,
+    current: Token,
+    error_count: i32
+}
+
+impl Parser {
+    pub fn new(tokenizer: Lexer, current: Token, error_count: i32) -> Self {
+        Self { tokenizer, current, error_count }
+    }
+
+    fn current(&self) -> &Token {
+        &self.current
+    }
+
+    fn at_eof(&self) -> bool {
+        self.current().tag == TokenType::Eof
+    }
+
+    fn advance(&mut self) -> Token {
+        loop {
+            let temp = self.tokenizer.next();
+
+            let temp_tag = temp.tag;
+
+            match temp_tag {
+                TokenType::Spaces | TokenType::Comment => {
+                    continue;
+                },
+                _ => {
+                    return temp;
+                }
+            }
+        }
+    }
+
+    fn match_here<const N: usize>(&self, picks: [TokenType; N]) -> bool {
+        picks.contains(&self.current().tag)
+    }
+
+    fn recover_and_report(&mut self, msg: &str) {
+        let culprit_line = self.current().line_no;
+        let culprit_col = self.current().col_no;
+        let culprit_lexeme = self.current().to_lexeme_str(self.tokenizer.view_source()).expect("...");
+
+        println!(
+            "Syntax error no. {}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
+            self.error_count,
+            culprit_lexeme,
+            culprit_line,
+            culprit_col,
+            msg
+        );
+
+        self.error_count += 1;
+
+        while !self.at_eof() {
+            if self.match_here([TokenType::Keyword]) {
+                break;
+            }
+
+            self.consume_any();
+        }
+    }
+
+    fn consume_any(&mut self) {
+        self.current = self.advance();
+    }
+
+    fn consume_of<const N: usize>(&mut self, picks: [TokenType; N]) -> bool {
+        if self.match_here(picks) {
+            self.consume_any();
+            return true;
+        }
+
+        self.recover_and_report("Unexpected token!");
+
+        false
+    }
+
+    fn parse_type(&mut self) -> Box<dyn TypeKind> {
+        let typename_lexeme = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+
+        match typename_lexeme {
+            "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
+            "int" => Box::new(PrimitiveInfo::new(PrimitiveTag::Integer)),
+            "float" => Box::new(PrimitiveInfo::new(PrimitiveTag::Floating)),
+            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown))
+        }
+    }
+
+    fn parse_primitive(&mut self) -> Option<Box<dyn Expr>> {
+        let token_copy = self.current().clone();
+
+        if !self.consume_of([TokenType::LiteralBool, TokenType::LiteralInt, TokenType::LiteralFloat, TokenType::Identifier]) {
+            return None;
+        }
+
+        Some(Box::new(
+            Primitive::new(token_copy)
+        ))
+    }
+
+    fn parse_access(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_primitive();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        let mut lhs = lhs_opt.unwrap();
+
+        while !self.at_eof() {
+            if !self.match_here([TokenType::OpAccess]) {
+                break;
+            }
+
+            self.consume_any();
+
+            let rhs_box = self.parse_primitive();
+
+            if rhs_box.is_none() {
+                return None;
+            }
+
+            let rhs = rhs_box.unwrap();
+
+            lhs = Box::new(Binary::new(lhs, rhs, OperatorTag::Access));
+        }
+
+        Some(lhs)
+    }
+
+    fn parse_call(&mut self) -> Option<Box<dyn Expr>> {
+        let callee_opt = self.parse_access();
+
+        if callee_opt.is_none() {
+            return None;
+        }
+
+        let callee_expr = callee_opt.unwrap();
+        let mut calling_args = Vec::<Box<dyn Expr>>::new();
+
+        self.consume_of([TokenType::ParenOpen]);
+
+        if self.match_here([TokenType::ParenClose]) {
+            return Some(Box::new(Call::new(callee_expr, calling_args)));
+        }
+
+        let first_arg_opt = self.parse_compare();
+
+        if first_arg_opt.is_none() {
+            return None;
+        }
+
+        calling_args.push(first_arg_opt.unwrap());
+
+        while !self.at_eof() {
+            if self.match_here([TokenType::ParenClose]) {
+                self.consume_any();
+                break;
+            }
+
+            self.consume_of([TokenType::Comma]);
+
+            let next_arg_opt = self.parse_compare();
+
+            if next_arg_opt.is_none() {
+                return None;
+            }
+
+            calling_args.push(next_arg_opt.unwrap());
+        }
+
+        Some(Box::new(
+            Call::new(callee_expr, calling_args)
+        ))
+    }
+
+    fn parse_unary(&mut self) -> Option<Box<dyn Expr>> {
+        let current_tag = self.current().tag;
+
+        let prefixed_op = match current_tag {
+            TokenType::OpMinus => OperatorTag::Minus,
+            TokenType::OpIncrement => OperatorTag::Increment,
+            TokenType::OpDecrement => OperatorTag::Decrement,
+            _ => OperatorTag::Noop
+        };
+
+        if prefixed_op != OperatorTag::Noop {
+            self.consume_any();
+        }
+
+        let temp_inner_opt = self.parse_call();
+
+        if temp_inner_opt.is_none() {
+            return None;
+        }
+
+        Some(Box::new(
+            Unary::new(temp_inner_opt.unwrap(), prefixed_op)
+        ))
+    }
+
+    fn parse_factor(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_unary();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        let mut lhs = lhs_opt.unwrap();
+
+        while !self.at_eof() {
+            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+                break;
+            }
+
+            let temp_tag = self.current().tag;
+
+            let temp_op = if temp_tag == TokenType::OpTimes {
+                OperatorTag::Times
+            } else {
+                OperatorTag::Slash
+            };
+
+            let rhs_opt = self.parse_unary();
+
+            if rhs_opt.is_none() {
+                return None;
+            }
+
+            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+        }
+
+        Some(lhs)
+    }
+
+    fn parse_term(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        let mut lhs = lhs_opt.unwrap();
+
+        while !self.at_eof() {
+            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+                break;
+            }
+
+            let temp_tag = self.current().tag;
+
+            let temp_op = if temp_tag == TokenType::OpPlus {
+                OperatorTag::Plus
+            } else {
+                OperatorTag::Minus
+            };
+
+            let rhs_opt = self.parse_factor();
+
+            if rhs_opt.is_none() {
+                return None;
+            }
+
+            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+        }
+
+        Some(lhs)
+    }
+
+    fn parse_equality(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_term();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        let mut lhs = lhs_opt.unwrap();
+
+        while !self.at_eof() {
+            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+                break;
+            }
+
+            let temp_tag = self.current().tag;
+
+            let temp_op = if temp_tag == TokenType::OpEquality {
+                OperatorTag::Equality
+            } else {
+                OperatorTag::Inequality
+            };
+
+            let rhs_opt = self.parse_term();
+
+            if rhs_opt.is_none() {
+                return None;
+            }
+
+            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+        }
+
+        Some(lhs)
+    }
+
+    fn parse_compare(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        let mut lhs = lhs_opt.unwrap();
+
+        while !self.at_eof() {
+            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+                break;
+            }
+
+            let temp_tag = self.current().tag;
+
+            let temp_op = if temp_tag == TokenType::OpEquality {
+                OperatorTag::Equality
+            } else {
+                OperatorTag::Inequality
+            };
+
+            let rhs_opt = self.parse_equality();
+
+            if rhs_opt.is_none() {
+                return None;
+            }
+
+            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+        }
+
+        Some(lhs)
+    }
+
+    fn parse_assign(&mut self) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_access();
+
+        if lhs_opt.is_none() {
+            return None;
+        }
+
+        self.consume_of([TokenType::OpAssign]);
+
+        let rhs_opt = self.parse_compare();
+
+        if rhs_opt.is_none() {
+            return None;
+        }
+
+        Some(Box::new(
+            Binary::new(lhs_opt.unwrap(), rhs_opt.unwrap(), OperatorTag::Assign)
+        ))
+    }
+
+    fn parse_variable_decl(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword]);
+
+        let var_name = self.current().clone();
+
+        self.consume_of([TokenType::Identifier]);
+        self.consume_of([TokenType::Colon]);
+
+        let var_type_box = self.parse_type();
+
+        self.consume_of([TokenType::OpAssign]);
+
+        let var_init_expr_opt = self.parse_compare();
+
+        if var_init_expr_opt.is_none() {
+            return None;
+        }
+
+        let var_init_expr = var_init_expr_opt.unwrap();
+
+        Some(Box::new(
+            VariableDecl::new(var_name, var_type_box, var_init_expr)
+        ))
+    }
+
+    fn parse_if(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword]);
+
+        let conds_opt = self.parse_compare();
+
+        if conds_opt.is_none() {
+            return None;
+        }
+
+        let conds_expr = conds_opt.unwrap();
+
+        let truthy_body_opt = self.parse_block();
+
+        if truthy_body_opt.is_none() {
+            return None;
+        }
+
+        let truthy_body = truthy_body_opt.unwrap();
+        
+        if self.current().to_lexeme_str(self.tokenizer.view_source()).expect("") == "else" {
+            self.consume_any();
+
+            let falsy_body_opt = self.parse_block();
+
+            if falsy_body_opt.is_none() {
+                return None;
+            }
+
+            return Some(Box::new(
+                If::new(truthy_body, falsy_body_opt.unwrap(), conds_expr)
+            ));
+        }
+
+        let dud_falsy_body = Box::new(Block::new(Vec::new()));
+
+        Some(Box::new(If::new(truthy_body, dud_falsy_body, conds_expr)))
+    }
+
+    fn parse_return(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_any();
+
+        let result_expr_opt = self.parse_compare();
+
+        if result_expr_opt.is_none() {
+            return None;
+        }
+
+        Some(Box::new(
+            Return::new(result_expr_opt.unwrap())
+        ))
+    }
+
+    fn parse_expr_stmt(&mut self) -> Option<Box<dyn Stmt>> {
+        let inner_expr_opt = self.parse_assign();
+
+        if inner_expr_opt.is_none() {
+            return None;
+        }
+
+        Some(Box::new(
+            ExprStmt::new(inner_expr_opt.unwrap())
+        ))
+    }
+
+    fn parse_nestable(&mut self) -> Option<Box<dyn Stmt>> {
+        let keyword = self.current().to_lexeme_str(self.tokenizer.view_source()).expect("");
+
+        match keyword {
+            "let" => self.parse_variable_decl(),
+            "if" => self.parse_if(),
+            "return" => self.parse_return(),
+            _ => self.parse_expr_stmt()
+        }
+    }
+
+    fn parse_block(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::BraceOpen]);
+
+        let mut items = Vec::<Box<dyn Stmt>>::new();
+
+        while !self.at_eof() {
+            if self.match_here([TokenType::BraceClose]) {
+                self.consume_any();
+                break;
+            }
+
+            let next_stmt_opt = self.parse_nestable();
+
+            if next_stmt_opt.is_none() {
+                return None;
+            }
+
+            items.push(next_stmt_opt.unwrap());
+        }
+
+        Some(Box::new(
+            Block::new(items)
+        ))
+    }
+
+    fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword]);
+
+        let func_name_token = self.current().clone();
+        let func_params = self.parse_function_params();
+
+        self.consume_of([TokenType::Colon]);
+        let func_type_box = self.parse_type();
+
+        let func_body_opt = self.parse_block();
+
+        if func_body_opt.is_none() {
+            return None;
+        }
+
+        Some(Box::new(
+            FunctionDecl::new(func_name_token, func_params, func_type_box, func_body_opt.unwrap())
+        ))
+    }
+
+    fn parse_param_decl(&mut self) -> ParamDecl {
+        let name_token = self.current().clone();
+        self.consume_of([TokenType::Identifier]);
+        self.consume_of([TokenType::Colon]);
+
+        let typing_box = self.parse_type();
+
+        ParamDecl::new(name_token, typing_box)
+    }
+
+    fn parse_function_params(&mut self) -> Vec<ParamDecl> {
+        self.consume_of([TokenType::ParenOpen]);
+
+        let mut parameters = Vec::<ParamDecl>::new();
+
+        if self.match_here([TokenType::ParenClose]) {
+            self.consume_any();
+            return parameters;
+        }
+
+        parameters.push(self.parse_param_decl());
+
+        while !self.at_eof() {
+            if self.match_here([TokenType::ParenClose]) {
+                self.consume_any();
+                break;
+            }
+
+            self.consume_of([TokenType::Comma]);
+
+            parameters.push(self.parse_param_decl());
+        }
+
+        parameters
+    }
+
+    // TODO: implement this method.
+    pub fn parse_file(&mut self) -> ParseResult {
+        let mut all_top_stmts = ASTDecls::new();
+
+        while !self.at_eof() {
+            let func_decl_opt = self.parse_function_decl();
+
+            if func_decl_opt.is_none() {
+                return None;
+            }
+
+            all_top_stmts.push(func_decl_opt.unwrap());
+        }
+
+        Some(all_top_stmts)
+    }
+}

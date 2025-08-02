@@ -264,6 +264,7 @@ impl Lexer {
             '#' => self.lex_comment(),
             ':' => self.lex_single(TokenType::Colon),
             ',' => self.lex_single(TokenType::Comma),
+            ';' => self.lex_single(TokenType::Semicolon),
             '(' => self.lex_single(TokenType::ParenOpen),
             ')' => self.lex_single(TokenType::ParenClose),
             '{' => self.lex_single(TokenType::BraceOpen),

@@ -23,7 +23,7 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <array> ::= "[" ( <compare> ( "," <compare> )* )? "]"
 <lambda> ::= "fun" <params> ":" <typename> <block>
 <access> ::= <atom> ("." <atom>)*
-<call> ::= <access> ( ( <compare> (, <compare>)* )? )
+<call> ::= <access> ( ( <compare> (, <compare>)* )? )?
 <unary> ::= <negate> | <increment> | <decrement>
 <negate> ::= "-"? <call>
 <increment> ::= "++"? <call>

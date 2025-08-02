@@ -166,12 +166,20 @@ impl Parser {
         }
 
         let callee_expr = callee_opt.unwrap();
+
+        if !self.match_here([TokenType::ParenOpen]) {
+            return Some(callee_expr);
+        }
+
+        self.consume_any();
+
         let mut calling_args = Vec::<Box<dyn Expr>>::new();
 
-        self.consume_of([TokenType::ParenOpen]);
-
         if self.match_here([TokenType::ParenClose]) {
-            return Some(Box::new(Call::new(callee_expr, calling_args)));
+            self.consume_any();
+            return Some(Box::new(
+                Call::new(callee_expr, calling_args)
+            ));
         }
 
         let first_arg_opt = self.parse_compare();
@@ -205,18 +213,18 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Option<Box<dyn Expr>> {
+        if !self.match_here([TokenType::OpMinus, TokenType::OpIncrement, TokenType::OpDecrement]) {
+            return self.parse_call();
+        }
+        
         let current_tag = self.current().tag;
-
         let prefixed_op = match current_tag {
             TokenType::OpMinus => OperatorTag::Minus,
             TokenType::OpIncrement => OperatorTag::Increment,
-            TokenType::OpDecrement => OperatorTag::Decrement,
-            _ => OperatorTag::Noop
+            _ => OperatorTag::Decrement,
         };
 
-        if prefixed_op != OperatorTag::Noop {
-            self.consume_any();
-        }
+        self.consume_any();
 
         let temp_inner_opt = self.parse_call();
 

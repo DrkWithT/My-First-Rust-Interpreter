@@ -4,19 +4,19 @@ use crate::{frontend::token::*, token_from};
 
 pub mod matchers {
     pub fn check_spaces(c: char) -> bool {
-        return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+        c.is_ascii_whitespace()
     }
 
     pub fn check_alpha(c: char) -> bool {
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+        c.is_ascii_alphabetic() || c == '_'
     }
 
     pub fn check_digit(c: char) -> bool {
-        return c >= '0' && c <= '9';
+        c.is_ascii_digit()
     }
 
     pub fn check_numeric(c: char) -> bool {
-        return check_digit(c) || c == '.';
+        check_digit(c) || c == '.'
     }
 
     pub fn check_multi<const N: usize>(c: char, targets: [char; N]) -> bool {
@@ -41,12 +41,12 @@ pub struct Lexer {
 
 impl Lexer {
     /// NOTE: the `source_view` argument must view a source string that lives until the program ends... This is why it is static-lifetime marked.
-    pub fn new(items: HashMap<String, TokenType>, source_view: &String, pos: usize, end: usize, line: usize, column: usize) -> Self {
-        Self { items, source: source_view.clone(), pos, end, line, column }
+    pub fn new(items: HashMap<String, TokenType>, source_view: &str, pos: usize, end: usize, line: usize, column: usize) -> Self {
+        Self { items, source: source_view.to_string(), pos, end, line, column }
     }
 
     pub fn view_source(&self) -> &str {
-        &self.source.as_str()
+        self.source.as_str()
     }
     
     fn at_end(&self) -> bool {
@@ -60,14 +60,16 @@ impl Lexer {
             return '\0';
         }
 
-        return self.source
+        let symbol_expect_msg = format!("Could not peek symbol at {raw_src_pos}");
+
+        self.source
+            .as_str()
             .chars()
             .nth(raw_src_pos)
-            .expect(format!("Could not peek symbol at {}", raw_src_pos)
-            .as_str());
+            .expect(&symbol_expect_msg)
     }
 
-    fn update_source_location(&mut self, c: char) -> () {
+    fn update_source_location(&mut self, c: char) {
         match c {
             '\n' => {
                 self.line += 1;
@@ -159,9 +161,9 @@ impl Lexer {
         let result_lexeme = result.to_lexeme_str(source_view).or(Some("")).expect("Lexer::lex_word panicked while getting lexeme");
 
         token_from!(
-            self.items.get(result_lexeme).or(
+            *self.items.get(result_lexeme).or(
                 Some(&TokenType::Identifier)
-            ).expect("Lexer::lex_word panicked while deducing lexical tag").clone(),
+            ).expect("Lexer::lex_word panicked while deducing lexical tag"),
             temp_start,
             temp_len,
             temp_line,
@@ -223,9 +225,9 @@ impl Lexer {
         let result_lexeme = result.to_lexeme_str(source_view).or(Some("")).expect("Lexer::lex_operator panicked while getting lexeme");
 
         token_from!(
-            self.items.get(result_lexeme).or(
+            *self.items.get(result_lexeme).or(
                 Some(&TokenType::Unknown)
-            ).expect("Lexer::lex_operator panicked while deducing lexical tag").clone(),
+            ).expect("Lexer::lex_operator panicked while deducing lexical tag"),
             temp_start,
             temp_len,
             temp_line,
@@ -235,19 +237,19 @@ impl Lexer {
 
     fn lex_complex(&mut self, c: char) -> Token {
         if matchers::check_spaces(c) {
-            return self.lex_spaces();
+            self.lex_spaces()
         } else if matchers::check_alpha(c) {
-            return self.lex_word();
+            self.lex_word()
         } else if matchers::check_numeric(c) {
-            return self.lex_numbers();
+            self.lex_numbers()
         } else if matchers::check_multi(c, ['.', '+', '-', '*', '/', '!', '=', '<', '>']) {
-            return self.lex_operator();
+            self.lex_operator()
         } else {
-            return self.lex_single(TokenType::Unknown);
+            self.lex_single(TokenType::Unknown)
         }
     }
 
-    pub fn next(&mut self) -> Token {
+    pub fn lex_next(&mut self) -> Token {
         if self.at_end() {
             return token_from!(
                 TokenType::Eof,

@@ -34,7 +34,7 @@ impl Parser {
 
     fn advance(&mut self) -> Token {
         loop {
-            let temp = self.tokenizer.next();
+            let temp = self.tokenizer.lex_next();
 
             let temp_tag = temp.tag;
 
@@ -129,7 +129,7 @@ impl Parser {
             return None;
         }
 
-        let token_copy = self.current().clone();
+        let token_copy = *self.current();
 
         Some(Box::new(
             Primitive::new(token_copy)
@@ -139,9 +139,7 @@ impl Parser {
     fn parse_access(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt = self.parse_primitive();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         let mut lhs = lhs_opt.unwrap();
 
@@ -154,9 +152,7 @@ impl Parser {
 
             let rhs_box = self.parse_primitive();
 
-            if rhs_box.is_none() {
-                return None;
-            }
+            rhs_box.as_ref()?;
 
             let rhs = rhs_box.unwrap();
 
@@ -169,9 +165,7 @@ impl Parser {
     fn parse_call(&mut self) -> Option<Box<dyn Expr>> {
         let callee_opt = self.parse_access();
 
-        if callee_opt.is_none() {
-            return None;
-        }
+        callee_opt.as_ref()?;
 
         let callee_expr = callee_opt.unwrap();
 
@@ -192,9 +186,7 @@ impl Parser {
 
         let first_arg_opt = self.parse_compare();
 
-        if first_arg_opt.is_none() {
-            return None;
-        }
+        first_arg_opt.as_ref()?;
 
         calling_args.push(first_arg_opt.unwrap());
 
@@ -208,9 +200,7 @@ impl Parser {
 
             let next_arg_opt = self.parse_compare();
 
-            if next_arg_opt.is_none() {
-                return None;
-            }
+            next_arg_opt.as_ref()?;
 
             calling_args.push(next_arg_opt.unwrap());
         }
@@ -236,9 +226,7 @@ impl Parser {
 
         let temp_inner_opt = self.parse_call();
 
-        if temp_inner_opt.is_none() {
-            return None;
-        }
+        temp_inner_opt.as_ref()?;
 
         Some(Box::new(
             Unary::new(temp_inner_opt.unwrap(), prefixed_op)
@@ -248,9 +236,7 @@ impl Parser {
     fn parse_factor(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt = self.parse_unary();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         let mut lhs = lhs_opt.unwrap();
 
@@ -271,9 +257,7 @@ impl Parser {
 
             let rhs_opt = self.parse_unary();
 
-            if rhs_opt.is_none() {
-                return None;
-            }
+            rhs_opt.as_ref()?;
 
             lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
         }
@@ -284,9 +268,7 @@ impl Parser {
     fn parse_term(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         let mut lhs = lhs_opt.unwrap();
 
@@ -307,9 +289,7 @@ impl Parser {
             
             let rhs_opt = self.parse_factor();
 
-            if rhs_opt.is_none() {
-                return None;
-            }
+            rhs_opt.as_ref()?;
 
             lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
         }
@@ -320,9 +300,7 @@ impl Parser {
     fn parse_equality(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_term();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         let mut lhs = lhs_opt.unwrap();
 
@@ -343,9 +321,7 @@ impl Parser {
 
             let rhs_opt = self.parse_term();
 
-            if rhs_opt.is_none() {
-                return None;
-            }
+            rhs_opt.as_ref()?;
 
             lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
         }
@@ -356,9 +332,7 @@ impl Parser {
     fn parse_compare(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         let mut lhs = lhs_opt.unwrap();
 
@@ -379,9 +353,7 @@ impl Parser {
 
             let rhs_opt = self.parse_equality();
 
-            if rhs_opt.is_none() {
-                return None;
-            }
+            rhs_opt.as_ref()?;
 
             lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
         }
@@ -392,9 +364,7 @@ impl Parser {
     fn parse_assign(&mut self) -> Option<Box<dyn Expr>> {
         let lhs_opt = self.parse_access();
 
-        if lhs_opt.is_none() {
-            return None;
-        }
+        lhs_opt.as_ref()?;
 
         if !self.match_here([TokenType::OpAssign]) {
             return Some(lhs_opt.unwrap());
@@ -404,9 +374,7 @@ impl Parser {
 
         let rhs_opt = self.parse_compare();
 
-        if rhs_opt.is_none() {
-            return None;
-        }
+        rhs_opt.as_ref()?;
 
         Some(Box::new(
             Binary::new(lhs_opt.unwrap(), rhs_opt.unwrap(), OperatorTag::Assign)
@@ -416,7 +384,7 @@ impl Parser {
     fn parse_variable_decl(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_of([TokenType::Keyword]);
 
-        let var_name = self.current().clone();
+        let var_name = *self.current();
 
         self.consume_of([TokenType::Identifier]);
         self.consume_of([TokenType::Colon]);
@@ -427,9 +395,7 @@ impl Parser {
 
         let var_init_expr_opt = self.parse_compare();
 
-        if var_init_expr_opt.is_none() {
-            return None;
-        }
+        var_init_expr_opt.as_ref()?;
 
         let var_init_expr = var_init_expr_opt.unwrap();
 
@@ -445,17 +411,13 @@ impl Parser {
 
         let conds_opt = self.parse_compare();
 
-        if conds_opt.is_none() {
-            return None;
-        }
+        conds_opt.as_ref()?;
 
         let conds_expr = conds_opt.unwrap();
 
         let truthy_body_opt = self.parse_block();
 
-        if truthy_body_opt.is_none() {
-            return None;
-        }
+        truthy_body_opt.as_ref()?;
 
         let truthy_body = truthy_body_opt.unwrap();
         
@@ -464,9 +426,7 @@ impl Parser {
 
             let falsy_body_opt = self.parse_block();
 
-            if falsy_body_opt.is_none() {
-                return None;
-            }
+            falsy_body_opt.as_ref()?;
 
             return Some(Box::new(
                 If::new(truthy_body, falsy_body_opt.unwrap(), conds_expr)
@@ -483,9 +443,7 @@ impl Parser {
 
         let result_expr_opt = self.parse_compare();
 
-        if result_expr_opt.is_none() {
-            return None;
-        }
+        result_expr_opt.as_ref()?;
 
         self.consume_of([TokenType::Semicolon]);
 
@@ -497,9 +455,7 @@ impl Parser {
     fn parse_expr_stmt(&mut self) -> Option<Box<dyn Stmt>> {
         let inner_expr_opt = self.parse_assign();
 
-        if inner_expr_opt.is_none() {
-            return None;
-        }
+        inner_expr_opt.as_ref()?;
 
         self.consume_of([TokenType::Semicolon]);
 
@@ -532,9 +488,7 @@ impl Parser {
 
             let next_stmt_opt = self.parse_nestable();
 
-            if next_stmt_opt.is_none() {
-                return None;
-            }
+            next_stmt_opt.as_ref()?;
 
             items.push(next_stmt_opt.unwrap());
         }
@@ -547,7 +501,7 @@ impl Parser {
     fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_of([TokenType::Keyword]);
 
-        let func_name_token = self.current().clone();
+        let func_name_token = *self.current();
         self.consume_of([TokenType::Identifier]);
 
         let func_params = self.parse_function_params();
@@ -557,9 +511,7 @@ impl Parser {
 
         let func_body_opt = self.parse_block();
 
-        if func_body_opt.is_none() {
-            return None;
-        }
+        func_body_opt.as_ref()?;
 
         Some(Box::new(
             FunctionDecl::new(func_name_token, func_params, func_type_box, func_body_opt.unwrap())
@@ -567,7 +519,7 @@ impl Parser {
     }
 
     fn parse_param_decl(&mut self) -> ParamDecl {
-        let name_token = self.current().clone();
+        let name_token = *self.current();
         self.consume_of([TokenType::Identifier]);
         self.consume_of([TokenType::Colon]);
 
@@ -611,9 +563,7 @@ impl Parser {
         while !self.at_eof() {
             let func_decl_opt = self.parse_function_decl();
 
-            if func_decl_opt.is_none() {
-                return None;
-            }
+            func_decl_opt.as_ref()?;
 
             all_top_stmts.push(func_decl_opt.unwrap());
         }

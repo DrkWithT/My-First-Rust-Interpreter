@@ -10,7 +10,6 @@ pub mod semantics;
 use crate::frontend::token::*;
 use crate::frontend::parser::*;
 
-const MIN_ARG_COUNT: usize = 1;
 const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
 const CONCH_VERSION_MINOR: i32 = 1;
@@ -20,7 +19,7 @@ fn main() -> ExitCode {
     let mut arg_list= env::args();
     let arg_count: usize = arg_list.len() - 1;
 
-    if arg_count < MIN_ARG_COUNT || arg_count > MAX_ARG_COUNT {
+    if arg_count > MAX_ARG_COUNT {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
         return ExitCode::FAILURE;
     }
@@ -28,7 +27,7 @@ fn main() -> ExitCode {
     let first_arg_str = arg_list.nth(1).unwrap_or(String::from(""));
 
     if first_arg_str == "--version" {
-        println!("conchvm v.{}.{}.{}\nBy: DrkWithT (GitHub)", CONCH_VERSION_MAJOR, CONCH_VERSION_MINOR, CONCH_VERSION_PATCH);
+        println!("conchvm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)");
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
         println!("usage: ./conchvm [--help | --version | <file-name>]");

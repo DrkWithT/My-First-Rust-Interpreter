@@ -22,8 +22,8 @@ impl ParamDecl {
         &self.name_token
     }
 
-    pub fn get_typing(&self) -> &Box<dyn types::TypeKind> {
-        &self.typing
+    pub fn get_typing(&self) -> &dyn types::TypeKind {
+        &*self.typing
     }
 }
 
@@ -62,7 +62,7 @@ impl Expr for Primitive {
     }
 
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind> {
-        let temp_token_tag = self.token.tag.clone();
+        let temp_token_tag = self.token.tag;
 
         let deduced_type_tag = match temp_token_tag {
             TokenType::LiteralBool => types::PrimitiveTag::Boolean,
@@ -89,8 +89,8 @@ impl Call {
         Self { callee, args }
     }
 
-    pub fn get_callee(&self) -> &Box<dyn Expr> {
-        &self.callee
+    pub fn get_callee(&self) -> &dyn Expr {
+        &*self.callee
     }
 
     pub fn get_args(&self) -> &Vec<Box<dyn Expr>> {
@@ -130,8 +130,8 @@ impl Unary {
         Self { inner, op_tag }
     }
 
-    pub fn get_inner(&self) -> &Box<dyn Expr> {
-        &self.inner
+    pub fn get_inner(&self) -> &dyn Expr {
+        &*self.inner
     }
 
     pub fn get_op_tag(&self) -> &types::OperatorTag {
@@ -177,12 +177,12 @@ impl Binary {
         Self { lhs, rhs, op_tag }
     }
 
-    pub fn get_lhs(&self) -> &Box<dyn Expr> {
-        &self.lhs
+    pub fn get_lhs(&self) -> &dyn Expr {
+        &*self.lhs
     }
 
-    pub fn get_rhs(&self) -> &Box<dyn Expr> {
-        &self.rhs
+    pub fn get_rhs(&self) -> &dyn Expr {
+        &*self.rhs
     }
 }
 
@@ -237,12 +237,12 @@ impl FunctionDecl {
         &self.params
     }
 
-    pub fn get_result_type(&self) -> &Box<dyn types::TypeKind> {
-        &self.result_typing
+    pub fn get_result_type(&self) -> &dyn types::TypeKind {
+        &*self.result_typing
     }
 
-    pub fn get_body(&self) -> &Box<dyn Stmt> {
-        &self.body
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
     }
 }
 
@@ -311,12 +311,12 @@ impl VariableDecl {
         &self.name_token
     }
 
-    pub fn get_typing(&self) -> &Box<dyn types::TypeKind> {
-        &self.typing
+    pub fn get_typing(&self) -> &dyn types::TypeKind {
+        &*self.typing
     }
 
-    pub fn get_init_expr(&self) -> &Box<dyn Expr> {
-        &self.init_expr
+    pub fn get_init_expr(&self) -> &dyn Expr {
+        &*self.init_expr
     }
 }
 
@@ -349,16 +349,16 @@ impl If {
         Self { truthy, falsy, check }
     }
 
-    pub fn get_truthy_body(&self) -> &Box<dyn Stmt> {
-        &self.truthy
+    pub fn get_truthy_body(&self) -> &dyn Stmt {
+        &*self.truthy
     }
 
-    pub fn get_falsy_body(&self) -> &Box<dyn Stmt> {
-        &self.falsy
+    pub fn get_falsy_body(&self) -> &dyn Stmt {
+        &*self.falsy
     }
 
-    pub fn get_check(&self) -> &Box<dyn Expr> {
-        &self.check
+    pub fn get_check(&self) -> &dyn Expr {
+        &*self.check
     }
 }
 
@@ -389,8 +389,8 @@ impl Return {
         Self { result }
     }
 
-    pub fn get_result(&self) -> &Box<dyn Expr> {
-        &self.result
+    pub fn get_result(&self) -> &dyn Expr {
+        &*self.result
     }
 }
 
@@ -421,8 +421,8 @@ impl ExprStmt {
         Self { inner }
     }
 
-    pub fn get_inner(&self) -> &Box<dyn Expr> {
-        &self.inner
+    pub fn get_inner(&self) -> &dyn Expr {
+        &*self.inner
     }
 }
 

@@ -17,9 +17,9 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <array-type> ::= "[" <int> : <typename> "]"
 <comment> ::= "#" ...
 
-; exprs
-<atom> ::= <primitive> | <lambda> | (<compare>) | <array>
-<primitive> ::= <boolean> | <int> | <float> | <identifier>
+; exprs (TODO: fuse atom to primitive)
+<atom> ::= <primitive> | <lambda> | <array>
+<primitive> ::= <boolean> | <int> | <float> | <identifier> | (<compare>)
 <array> ::= "[" ( <compare> ( "," <compare> )* )? "]"
 <lambda> ::= "fun" <params> ":" <typename> <block>
 <access> ::= <atom> ("." <atom>)*

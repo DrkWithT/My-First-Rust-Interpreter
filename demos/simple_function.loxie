@@ -13,15 +13,15 @@ fun average(x: int, y: int): int {
 }
 
 fun main(): int {
-    let answer_1: int = max(10, 20);
+    let answer_a: int = max(10, 20);
 
-    if answer_1 != 20 {
+    if answer_a != 20 {
         return 1;
     }
 
-    let answer_2: int = average(10, 20);
+    let answer_b: int = average(10, 20);
 
-    if answer_2 != 15 {
+    if answer_b != 15 {
         return 1;
     }
 

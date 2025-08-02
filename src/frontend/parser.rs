@@ -117,11 +117,19 @@ impl Parser {
     }
 
     fn parse_primitive(&mut self) -> Option<Box<dyn Expr>> {
-        let token_copy = self.current().clone();
+        if self.match_here([TokenType::ParenOpen]) {
+            self.consume_any();
+            let parenthesized_expr = self.parse_compare();
+            self.consume_of([TokenType::ParenClose]);
+
+            return parenthesized_expr;
+        }
 
         if !self.consume_of([TokenType::LiteralBool, TokenType::LiteralInt, TokenType::LiteralFloat, TokenType::Identifier]) {
             return None;
         }
+
+        let token_copy = self.current().clone();
 
         Some(Box::new(
             Primitive::new(token_copy)
@@ -259,6 +267,8 @@ impl Parser {
                 OperatorTag::Slash
             };
 
+            self.consume_any();
+
             let rhs_opt = self.parse_unary();
 
             if rhs_opt.is_none() {
@@ -281,18 +291,20 @@ impl Parser {
         let mut lhs = lhs_opt.unwrap();
 
         while !self.at_eof() {
-            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+            if !self.match_here([TokenType::OpPlus, TokenType::OpMinus]) {
                 break;
             }
 
             let temp_tag = self.current().tag;
-
+            
             let temp_op = if temp_tag == TokenType::OpPlus {
                 OperatorTag::Plus
             } else {
                 OperatorTag::Minus
             };
 
+            self.consume_any();
+            
             let rhs_opt = self.parse_factor();
 
             if rhs_opt.is_none() {
@@ -315,7 +327,7 @@ impl Parser {
         let mut lhs = lhs_opt.unwrap();
 
         while !self.at_eof() {
-            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+            if !self.match_here([TokenType::OpEquality, TokenType::OpInequality]) {
                 break;
             }
 
@@ -326,6 +338,8 @@ impl Parser {
             } else {
                 OperatorTag::Inequality
             };
+
+            self.consume_any();
 
             let rhs_opt = self.parse_term();
 
@@ -349,17 +363,19 @@ impl Parser {
         let mut lhs = lhs_opt.unwrap();
 
         while !self.at_eof() {
-            if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
+            if !self.match_here([TokenType::OpLessThan, TokenType::OpGreaterThan]) {
                 break;
             }
 
             let temp_tag = self.current().tag;
 
-            let temp_op = if temp_tag == TokenType::OpEquality {
-                OperatorTag::Equality
+            let temp_op = if temp_tag == TokenType::OpLessThan {
+                OperatorTag::LessThan
             } else {
-                OperatorTag::Inequality
+                OperatorTag::GreaterThan
             };
+
+            self.consume_any();
 
             let rhs_opt = self.parse_equality();
 
@@ -602,7 +618,6 @@ impl Parser {
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
-        if self.error_count == 0 { Some(all_top_stmts) }
-        else { None }
+        if self.error_count == 0 { Some(all_top_stmts) } else { None }
     }
 }

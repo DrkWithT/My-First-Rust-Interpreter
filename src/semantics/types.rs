@@ -13,7 +13,7 @@ pub enum OperatorTag {
     Noop,
     Access,
     Call,
-    OpIncrement,
+    Increment,
     Decrement,
     Times,
     Slash,

@@ -152,7 +152,7 @@ impl Expr for Unary {
         if inner_is_primitive {
             return match temp_op {
                 types::OperatorTag::Minus => inner_type_box,
-                types::OperatorTag::OpIncrement => inner_type_box,
+                types::OperatorTag::Increment => inner_type_box,
                 types::OperatorTag::Decrement => inner_type_box,
                 _ => Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
             }

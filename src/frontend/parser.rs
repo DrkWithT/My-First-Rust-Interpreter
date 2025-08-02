@@ -1,3 +1,4 @@
+use crate::token_from;
 use crate::frontend::token::{Token, TokenType};
 use crate::frontend::lexer::Lexer;
 use crate::frontend::ast::*;
@@ -8,13 +9,19 @@ pub type ParseResult = Option<ASTDecls>;
 
 pub struct Parser {
     tokenizer: Lexer,
+    previous: Token,
     current: Token,
-    error_count: i32
+    error_count: i32,
+    parse_error_max: i32
 }
 
 impl Parser {
-    pub fn new(tokenizer: Lexer, current: Token, error_count: i32) -> Self {
-        Self { tokenizer, current, error_count }
+    pub fn new(tokenizer: Lexer) -> Self {
+        Self { tokenizer, previous: token_from!(TokenType::Unknown, 0, 1, 1, 1), current: token_from!(TokenType::Unknown, 0, 1, 1, 1), error_count: 0, parse_error_max: 5 }
+    }
+
+    fn previous(&self) -> &Token {
+        &self.previous
     }
 
     fn current(&self) -> &Token {
@@ -47,9 +54,19 @@ impl Parser {
     }
 
     fn recover_and_report(&mut self, msg: &str) {
+        if self.error_count > self.parse_error_max {
+            return;
+        }
+
         let culprit_line = self.current().line_no;
         let culprit_col = self.current().col_no;
-        let culprit_lexeme = self.current().to_lexeme_str(self.tokenizer.view_source()).expect("...");
+        let culprit_lexeme_opt = self.current().to_lexeme_str(self.tokenizer.view_source());
+
+        if culprit_lexeme_opt.is_none() {
+            return;
+        }
+
+        let culprit_lexeme = culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
 
         println!(
             "Syntax error no. {}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
@@ -72,6 +89,7 @@ impl Parser {
     }
 
     fn consume_any(&mut self) {
+        self.previous = self.current;
         self.current = self.advance();
     }
 
@@ -87,7 +105,8 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Box<dyn TypeKind> {
-        let typename_lexeme = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+        self.consume_any();
+        let typename_lexeme = self.previous().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
 
         match typename_lexeme {
             "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
@@ -353,7 +372,11 @@ impl Parser {
             return None;
         }
 
-        self.consume_of([TokenType::OpAssign]);
+        if !self.match_here([TokenType::OpAssign]) {
+            return Some(lhs_opt.unwrap());
+        }
+
+        self.consume_any();
 
         let rhs_opt = self.parse_compare();
 
@@ -386,13 +409,15 @@ impl Parser {
 
         let var_init_expr = var_init_expr_opt.unwrap();
 
+        self.consume_of([TokenType::Semicolon]);
+
         Some(Box::new(
             VariableDecl::new(var_name, var_type_box, var_init_expr)
         ))
     }
 
     fn parse_if(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_of([TokenType::Keyword]);
+        self.consume_any();
 
         let conds_opt = self.parse_compare();
 
@@ -438,6 +463,8 @@ impl Parser {
             return None;
         }
 
+        self.consume_of([TokenType::Semicolon]);
+
         Some(Box::new(
             Return::new(result_expr_opt.unwrap())
         ))
@@ -449,6 +476,8 @@ impl Parser {
         if inner_expr_opt.is_none() {
             return None;
         }
+
+        self.consume_of([TokenType::Semicolon]);
 
         Some(Box::new(
             ExprStmt::new(inner_expr_opt.unwrap())
@@ -495,6 +524,8 @@ impl Parser {
         self.consume_of([TokenType::Keyword]);
 
         let func_name_token = self.current().clone();
+        self.consume_of([TokenType::Identifier]);
+
         let func_params = self.parse_function_params();
 
         self.consume_of([TokenType::Colon]);
@@ -549,6 +580,8 @@ impl Parser {
 
     // TODO: implement this method.
     pub fn parse_file(&mut self) -> ParseResult {
+        self.consume_any();
+
         let mut all_top_stmts = ASTDecls::new();
 
         while !self.at_eof() {
@@ -561,6 +594,7 @@ impl Parser {
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
-        Some(all_top_stmts)
+        if self.error_count == 0 { Some(all_top_stmts) }
+        else { None }
     }
 }

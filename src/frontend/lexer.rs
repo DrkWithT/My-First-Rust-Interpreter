@@ -122,13 +122,12 @@ impl Lexer {
 
         while !self.at_end() {
             let s = self.peek_off(0);
-
-            self.update_source_location(s);
-
+            
             if s == '\n' {
                 break;
             }
 
+            self.update_source_location(s);
             temp_len += 1;
             self.pos += 1;
         }

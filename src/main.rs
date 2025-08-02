@@ -52,6 +52,7 @@ fn main() -> ExitCode {
     }
 
     let source_text = source_text_opt.expect("Failed to unbox source string?");
+    let source_length = source_text.len();
 
     let mut lexical_items = HashMap::<String, TokenType>::new();
 
@@ -79,9 +80,8 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, 1, 1, 1);
-    let dud_token = token_from!(TokenType::Unknown, 0, 1, 1, 1);
-    let mut parser = Parser::new(tokenizer, dud_token, 0);
+    let tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
+    let mut parser = Parser::new(tokenizer);
 
     let ast_opt = parser.parse_file();
 

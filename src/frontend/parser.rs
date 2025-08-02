@@ -1,8 +1,8 @@
-use crate::token_from;
-use crate::frontend::token::{Token, TokenType};
-use crate::frontend::lexer::Lexer;
 use crate::frontend::ast::*;
+use crate::frontend::lexer::Lexer;
+use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types::*;
+use crate::token_from;
 
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
 pub type ParseResult = Option<ASTDecls>;
@@ -12,12 +12,18 @@ pub struct Parser {
     previous: Token,
     current: Token,
     error_count: i32,
-    parse_error_max: i32
+    parse_error_max: i32,
 }
 
 impl Parser {
     pub fn new(tokenizer: Lexer) -> Self {
-        Self { tokenizer, previous: token_from!(TokenType::Unknown, 0, 1, 1, 1), current: token_from!(TokenType::Unknown, 0, 1, 1, 1), error_count: 0, parse_error_max: 5 }
+        Self {
+            tokenizer,
+            previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
+            current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
+            error_count: 0,
+            parse_error_max: 5,
+        }
     }
 
     fn previous(&self) -> &Token {
@@ -41,7 +47,7 @@ impl Parser {
             match temp_tag {
                 TokenType::Spaces | TokenType::Comment => {
                     continue;
-                },
+                }
                 _ => {
                     return temp;
                 }
@@ -66,15 +72,12 @@ impl Parser {
             return;
         }
 
-        let culprit_lexeme = culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
+        let culprit_lexeme =
+            culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
 
         println!(
             "Syntax error no. {}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
-            self.error_count,
-            culprit_lexeme,
-            culprit_line,
-            culprit_col,
-            msg
+            self.error_count, culprit_lexeme, culprit_line, culprit_col, msg
         );
 
         self.error_count += 1;
@@ -106,13 +109,16 @@ impl Parser {
 
     fn parse_type(&mut self) -> Box<dyn TypeKind> {
         self.consume_any();
-        let typename_lexeme = self.previous().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+        let typename_lexeme = self
+            .previous()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .unwrap_or("");
 
         match typename_lexeme {
             "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
             "int" => Box::new(PrimitiveInfo::new(PrimitiveTag::Integer)),
             "float" => Box::new(PrimitiveInfo::new(PrimitiveTag::Floating)),
-            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown))
+            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown)),
         }
     }
 
@@ -125,25 +131,22 @@ impl Parser {
             return parenthesized_expr;
         }
 
-        if !self.consume_of([TokenType::LiteralBool, TokenType::LiteralInt, TokenType::LiteralFloat, TokenType::Identifier]) {
+        if !self.consume_of([
+            TokenType::LiteralBool,
+            TokenType::LiteralInt,
+            TokenType::LiteralFloat,
+            TokenType::Identifier,
+        ]) {
             return None;
         }
 
-        let token_copy = self.current().clone();
+        let token = *self.current();
 
-        Some(Box::new(
-            Primitive::new(token_copy)
-        ))
+        Some(Box::new(Primitive::new(token)))
     }
 
     fn parse_access(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_primitive();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
-
-        let mut lhs = lhs_opt.unwrap();
+        let mut lhs = self.parse_primitive()?;
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpAccess]) {
@@ -152,13 +155,7 @@ impl Parser {
 
             self.consume_any();
 
-            let rhs_box = self.parse_primitive();
-
-            if rhs_box.is_none() {
-                return None;
-            }
-
-            let rhs = rhs_box.unwrap();
+            let rhs = self.parse_primitive()?;
 
             lhs = Box::new(Binary::new(lhs, rhs, OperatorTag::Access));
         }
@@ -167,13 +164,7 @@ impl Parser {
     }
 
     fn parse_call(&mut self) -> Option<Box<dyn Expr>> {
-        let callee_opt = self.parse_access();
-
-        if callee_opt.is_none() {
-            return None;
-        }
-
-        let callee_expr = callee_opt.unwrap();
+        let callee_expr = self.parse_access()?;
 
         if !self.match_here([TokenType::ParenOpen]) {
             return Some(callee_expr);
@@ -185,18 +176,12 @@ impl Parser {
 
         if self.match_here([TokenType::ParenClose]) {
             self.consume_any();
-            return Some(Box::new(
-                Call::new(callee_expr, calling_args)
-            ));
+            return Some(Box::new(Call::new(callee_expr, calling_args)));
         }
 
-        let first_arg_opt = self.parse_compare();
+        let first_arg = self.parse_compare()?;
 
-        if first_arg_opt.is_none() {
-            return None;
-        }
-
-        calling_args.push(first_arg_opt.unwrap());
+        calling_args.push(first_arg);
 
         while !self.at_eof() {
             if self.match_here([TokenType::ParenClose]) {
@@ -206,25 +191,23 @@ impl Parser {
 
             self.consume_of([TokenType::Comma]);
 
-            let next_arg_opt = self.parse_compare();
+            let next_arg = self.parse_compare()?;
 
-            if next_arg_opt.is_none() {
-                return None;
-            }
-
-            calling_args.push(next_arg_opt.unwrap());
+            calling_args.push(next_arg);
         }
 
-        Some(Box::new(
-            Call::new(callee_expr, calling_args)
-        ))
+        Some(Box::new(Call::new(callee_expr, calling_args)))
     }
 
     fn parse_unary(&mut self) -> Option<Box<dyn Expr>> {
-        if !self.match_here([TokenType::OpMinus, TokenType::OpIncrement, TokenType::OpDecrement]) {
+        if !self.match_here([
+            TokenType::OpMinus,
+            TokenType::OpIncrement,
+            TokenType::OpDecrement,
+        ]) {
             return self.parse_call();
         }
-        
+
         let current_tag = self.current().tag;
         let prefixed_op = match current_tag {
             TokenType::OpMinus => OperatorTag::Minus,
@@ -234,25 +217,13 @@ impl Parser {
 
         self.consume_any();
 
-        let temp_inner_opt = self.parse_call();
+        let temp_inner = self.parse_call()?;
 
-        if temp_inner_opt.is_none() {
-            return None;
-        }
-
-        Some(Box::new(
-            Unary::new(temp_inner_opt.unwrap(), prefixed_op)
-        ))
+        Some(Box::new(Unary::new(temp_inner, prefixed_op)))
     }
 
     fn parse_factor(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_unary();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
-
-        let mut lhs = lhs_opt.unwrap();
+        let mut lhs = self.parse_unary()?;
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpTimes, TokenType::OpSlash]) {
@@ -269,26 +240,16 @@ impl Parser {
 
             self.consume_any();
 
-            let rhs_opt = self.parse_unary();
+            let rhs = self.parse_unary()?;
 
-            if rhs_opt.is_none() {
-                return None;
-            }
-
-            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+            lhs = Box::new(Binary::new(lhs, rhs, temp_op));
         }
 
         Some(lhs)
     }
 
     fn parse_term(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
-
-        let mut lhs = lhs_opt.unwrap();
+        let mut lhs = self.parse_factor()?;
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpPlus, TokenType::OpMinus]) {
@@ -296,7 +257,7 @@ impl Parser {
             }
 
             let temp_tag = self.current().tag;
-            
+
             let temp_op = if temp_tag == TokenType::OpPlus {
                 OperatorTag::Plus
             } else {
@@ -304,27 +265,17 @@ impl Parser {
             };
 
             self.consume_any();
-            
-            let rhs_opt = self.parse_factor();
 
-            if rhs_opt.is_none() {
-                return None;
-            }
+            let rhs = self.parse_factor()?;
 
-            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+            lhs = Box::new(Binary::new(lhs, rhs, temp_op));
         }
 
         Some(lhs)
     }
 
     fn parse_equality(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_term();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
-
-        let mut lhs = lhs_opt.unwrap();
+        let mut lhs = self.parse_term()?;
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpEquality, TokenType::OpInequality]) {
@@ -341,26 +292,16 @@ impl Parser {
 
             self.consume_any();
 
-            let rhs_opt = self.parse_term();
+            let rhs = self.parse_term()?;
 
-            if rhs_opt.is_none() {
-                return None;
-            }
-
-            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+            lhs = Box::new(Binary::new(lhs, rhs, temp_op));
         }
 
         Some(lhs)
     }
 
     fn parse_compare(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
-
-        let mut lhs = lhs_opt.unwrap();
+        let mut lhs = self.parse_equality()?;
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpLessThan, TokenType::OpGreaterThan]) {
@@ -377,46 +318,32 @@ impl Parser {
 
             self.consume_any();
 
-            let rhs_opt = self.parse_equality();
+            let rhs = self.parse_equality()?;
 
-            if rhs_opt.is_none() {
-                return None;
-            }
-
-            lhs = Box::new(Binary::new(lhs, rhs_opt.unwrap(), temp_op));
+            lhs = Box::new(Binary::new(lhs, rhs, temp_op));
         }
 
         Some(lhs)
     }
 
     fn parse_assign(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_access();
-
-        if lhs_opt.is_none() {
-            return None;
-        }
+        let lhs = self.parse_access()?;
 
         if !self.match_here([TokenType::OpAssign]) {
-            return Some(lhs_opt.unwrap());
+            return Some(lhs);
         }
 
         self.consume_any();
 
-        let rhs_opt = self.parse_compare();
+        let rhs = self.parse_compare()?;
 
-        if rhs_opt.is_none() {
-            return None;
-        }
-
-        Some(Box::new(
-            Binary::new(lhs_opt.unwrap(), rhs_opt.unwrap(), OperatorTag::Assign)
-        ))
+        Some(Box::new(Binary::new(lhs, rhs, OperatorTag::Assign)))
     }
 
     fn parse_variable_decl(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_of([TokenType::Keyword]);
 
-        let var_name = self.current().clone();
+        let var_name = *self.current();
 
         self.consume_of([TokenType::Identifier]);
         self.consume_of([TokenType::Colon]);
@@ -425,52 +352,35 @@ impl Parser {
 
         self.consume_of([TokenType::OpAssign]);
 
-        let var_init_expr_opt = self.parse_compare();
-
-        if var_init_expr_opt.is_none() {
-            return None;
-        }
-
-        let var_init_expr = var_init_expr_opt.unwrap();
+        let var_init_expr = self.parse_compare()?;
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            VariableDecl::new(var_name, var_type_box, var_init_expr)
-        ))
+        Some(Box::new(VariableDecl::new(
+            var_name,
+            var_type_box,
+            var_init_expr,
+        )))
     }
 
     fn parse_if(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_any();
 
-        let conds_opt = self.parse_compare();
+        let conds_expr = self.parse_compare()?;
 
-        if conds_opt.is_none() {
-            return None;
-        }
+        let truthy_body = self.parse_block()?;
 
-        let conds_expr = conds_opt.unwrap();
-
-        let truthy_body_opt = self.parse_block();
-
-        if truthy_body_opt.is_none() {
-            return None;
-        }
-
-        let truthy_body = truthy_body_opt.unwrap();
-        
-        if self.current().to_lexeme_str(self.tokenizer.view_source()).expect("") == "else" {
+        if self
+            .current()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .expect("")
+            == "else"
+        {
             self.consume_any();
 
-            let falsy_body_opt = self.parse_block();
+            let falsy_body = self.parse_block()?;
 
-            if falsy_body_opt.is_none() {
-                return None;
-            }
-
-            return Some(Box::new(
-                If::new(truthy_body, falsy_body_opt.unwrap(), conds_expr)
-            ));
+            return Some(Box::new(If::new(truthy_body, falsy_body, conds_expr)));
         }
 
         let dud_falsy_body = Box::new(Block::new(Vec::new()));
@@ -481,41 +391,32 @@ impl Parser {
     fn parse_return(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_any();
 
-        let result_expr_opt = self.parse_compare();
-
-        if result_expr_opt.is_none() {
-            return None;
-        }
+        let result_expr = self.parse_compare()?;
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            Return::new(result_expr_opt.unwrap())
-        ))
+        Some(Box::new(Return::new(result_expr)))
     }
 
     fn parse_expr_stmt(&mut self) -> Option<Box<dyn Stmt>> {
-        let inner_expr_opt = self.parse_assign();
-
-        if inner_expr_opt.is_none() {
-            return None;
-        }
+        let inner_expr = self.parse_assign()?;
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            ExprStmt::new(inner_expr_opt.unwrap())
-        ))
+        Some(Box::new(ExprStmt::new(inner_expr)))
     }
 
     fn parse_nestable(&mut self) -> Option<Box<dyn Stmt>> {
-        let keyword = self.current().to_lexeme_str(self.tokenizer.view_source()).expect("");
+        let keyword = self
+            .current()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .expect("");
 
         match keyword {
             "let" => self.parse_variable_decl(),
             "if" => self.parse_if(),
             "return" => self.parse_return(),
-            _ => self.parse_expr_stmt()
+            _ => self.parse_expr_stmt(),
         }
     }
 
@@ -530,24 +431,18 @@ impl Parser {
                 break;
             }
 
-            let next_stmt_opt = self.parse_nestable();
+            let next_stmt = self.parse_nestable()?;
 
-            if next_stmt_opt.is_none() {
-                return None;
-            }
-
-            items.push(next_stmt_opt.unwrap());
+            items.push(next_stmt);
         }
 
-        Some(Box::new(
-            Block::new(items)
-        ))
+        Some(Box::new(Block::new(items)))
     }
 
     fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_of([TokenType::Keyword]);
 
-        let func_name_token = self.current().clone();
+        let func_name_token = *self.current();
         self.consume_of([TokenType::Identifier]);
 
         let func_params = self.parse_function_params();
@@ -555,19 +450,18 @@ impl Parser {
         self.consume_of([TokenType::Colon]);
         let func_type_box = self.parse_type();
 
-        let func_body_opt = self.parse_block();
+        let func_body = self.parse_block()?;
 
-        if func_body_opt.is_none() {
-            return None;
-        }
-
-        Some(Box::new(
-            FunctionDecl::new(func_name_token, func_params, func_type_box, func_body_opt.unwrap())
-        ))
+        Some(Box::new(FunctionDecl::new(
+            func_name_token,
+            func_params,
+            func_type_box,
+            func_body,
+        )))
     }
 
     fn parse_param_decl(&mut self) -> ParamDecl {
-        let name_token = self.current().clone();
+        let name_token = *self.current();
         self.consume_of([TokenType::Identifier]);
         self.consume_of([TokenType::Colon]);
 
@@ -609,15 +503,14 @@ impl Parser {
         let mut all_top_stmts = ASTDecls::new();
 
         while !self.at_eof() {
-            let func_decl_opt = self.parse_function_decl();
+            let func_decl = self.parse_function_decl()?;
 
-            if func_decl_opt.is_none() {
-                return None;
-            }
-
-            all_top_stmts.push(func_decl_opt.unwrap());
+            all_top_stmts.push(func_decl);
         }
 
-        if self.error_count == 0 { Some(all_top_stmts) } else { None }
+        if self.error_count != 0 {
+            return None;
+        }
+        Some(all_top_stmts)
     }
 }

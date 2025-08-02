@@ -10,7 +10,7 @@ pub enum VisitResult {
 
 pub struct ParamDecl {
     name_token: Token,
-    typing: Box<dyn types::TypeKind>
+    typing: Box<dyn types::TypeKind>,
 }
 
 impl ParamDecl {
@@ -22,8 +22,8 @@ impl ParamDecl {
         &self.name_token
     }
 
-    pub fn get_typing(&self) -> &Box<dyn types::TypeKind> {
-        &self.typing
+    pub fn get_typing(&self) -> &dyn types::TypeKind {
+        &*self.typing
     }
 }
 
@@ -62,13 +62,13 @@ impl Expr for Primitive {
     }
 
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind> {
-        let temp_token_tag = self.token.tag.clone();
+        let temp_token_tag = self.token.tag;
 
         let deduced_type_tag = match temp_token_tag {
             TokenType::LiteralBool => types::PrimitiveTag::Boolean,
             TokenType::LiteralInt => types::PrimitiveTag::Integer,
             TokenType::LiteralFloat => types::PrimitiveTag::Floating,
-            _ => types::PrimitiveTag::Unknown
+            _ => types::PrimitiveTag::Unknown,
         };
 
         Box::new(types::PrimitiveInfo::new(deduced_type_tag))
@@ -81,7 +81,7 @@ impl Expr for Primitive {
 
 pub struct Call {
     callee: Box<dyn Expr>,
-    args: Vec<Box<dyn Expr>>
+    args: Vec<Box<dyn Expr>>,
 }
 
 impl Call {
@@ -89,8 +89,8 @@ impl Call {
         Self { callee, args }
     }
 
-    pub fn get_callee(&self) -> &Box<dyn Expr> {
-        &self.callee
+    pub fn get_callee(&self) -> &dyn Expr {
+        &*self.callee
     }
 
     pub fn get_args(&self) -> &Vec<Box<dyn Expr>> {
@@ -122,7 +122,7 @@ impl Expr for Call {
 
 pub struct Unary {
     inner: Box<dyn Expr>,
-    op_tag: types::OperatorTag
+    op_tag: types::OperatorTag,
 }
 
 impl Unary {
@@ -130,8 +130,8 @@ impl Unary {
         Self { inner, op_tag }
     }
 
-    pub fn get_inner(&self) -> &Box<dyn Expr> {
-        &self.inner
+    pub fn get_inner(&self) -> &dyn Expr {
+        &*self.inner
     }
 
     pub fn get_op_tag(&self) -> &types::OperatorTag {
@@ -154,8 +154,8 @@ impl Expr for Unary {
                 types::OperatorTag::Minus => inner_type_box,
                 types::OperatorTag::Increment => inner_type_box,
                 types::OperatorTag::Decrement => inner_type_box,
-                _ => Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
-            }
+                _ => Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown)),
+            };
         }
 
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
@@ -169,7 +169,7 @@ impl Expr for Unary {
 pub struct Binary {
     pub lhs: Box<dyn Expr>,
     pub rhs: Box<dyn Expr>,
-    pub op_tag: types::OperatorTag
+    pub op_tag: types::OperatorTag,
 }
 
 impl Binary {
@@ -177,12 +177,12 @@ impl Binary {
         Self { lhs, rhs, op_tag }
     }
 
-    pub fn get_lhs(&self) -> &Box<dyn Expr> {
-        &self.lhs
+    pub fn get_lhs(&self) -> &dyn Expr {
+        &*self.lhs
     }
 
-    pub fn get_rhs(&self) -> &Box<dyn Expr> {
-        &self.rhs
+    pub fn get_rhs(&self) -> &dyn Expr {
+        &*self.rhs
     }
 }
 
@@ -221,12 +221,22 @@ pub struct FunctionDecl {
     name_token: Token,
     params: Vec<ParamDecl>,
     result_typing: Box<dyn types::TypeKind>,
-    body: Box<dyn Stmt>
+    body: Box<dyn Stmt>,
 }
 
 impl FunctionDecl {
-    pub fn new(name_token: Token, params: Vec<ParamDecl>, result_typing: Box<dyn types::TypeKind>, body: Box<dyn Stmt>) -> Self {
-        Self { name_token, params, result_typing, body }
+    pub fn new(
+        name_token: Token,
+        params: Vec<ParamDecl>,
+        result_typing: Box<dyn types::TypeKind>,
+        body: Box<dyn Stmt>,
+    ) -> Self {
+        Self {
+            name_token,
+            params,
+            result_typing,
+            body,
+        }
     }
 
     pub fn get_name_token(&self) -> &Token {
@@ -237,12 +247,12 @@ impl FunctionDecl {
         &self.params
     }
 
-    pub fn get_result_type(&self) -> &Box<dyn types::TypeKind> {
-        &self.result_typing
+    pub fn get_result_type(&self) -> &dyn types::TypeKind {
+        &*self.result_typing
     }
 
-    pub fn get_body(&self) -> &Box<dyn Stmt> {
-        &self.body
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
     }
 }
 
@@ -265,7 +275,7 @@ impl Stmt for FunctionDecl {
 }
 
 pub struct Block {
-    items: Vec<Box<dyn Stmt>>
+    items: Vec<Box<dyn Stmt>>,
 }
 
 impl Block {
@@ -299,24 +309,32 @@ impl Stmt for Block {
 pub struct VariableDecl {
     name_token: Token,
     typing: Box<dyn types::TypeKind>,
-    init_expr: Box<dyn Expr>
+    init_expr: Box<dyn Expr>,
 }
 
 impl VariableDecl {
-    pub fn new(name_token: Token, typing: Box<dyn types::TypeKind>, init_expr: Box<dyn Expr>) -> Self {
-        Self { name_token, typing, init_expr }
+    pub fn new(
+        name_token: Token,
+        typing: Box<dyn types::TypeKind>,
+        init_expr: Box<dyn Expr>,
+    ) -> Self {
+        Self {
+            name_token,
+            typing,
+            init_expr,
+        }
     }
 
     pub fn get_name_token(&self) -> &Token {
         &self.name_token
     }
 
-    pub fn get_typing(&self) -> &Box<dyn types::TypeKind> {
-        &self.typing
+    pub fn get_typing(&self) -> &dyn types::TypeKind {
+        &*self.typing
     }
 
-    pub fn get_init_expr(&self) -> &Box<dyn Expr> {
-        &self.init_expr
+    pub fn get_init_expr(&self) -> &dyn Expr {
+        &*self.init_expr
     }
 }
 
@@ -341,24 +359,28 @@ impl Stmt for VariableDecl {
 pub struct If {
     truthy: Box<dyn Stmt>,
     falsy: Box<dyn Stmt>,
-    check: Box<dyn Expr>
+    check: Box<dyn Expr>,
 }
 
 impl If {
     pub fn new(truthy: Box<dyn Stmt>, falsy: Box<dyn Stmt>, check: Box<dyn Expr>) -> Self {
-        Self { truthy, falsy, check }
+        Self {
+            truthy,
+            falsy,
+            check,
+        }
     }
 
-    pub fn get_truthy_body(&self) -> &Box<dyn Stmt> {
-        &self.truthy
+    pub fn get_truthy_body(&self) -> &dyn Stmt {
+        &*self.truthy
     }
 
-    pub fn get_falsy_body(&self) -> &Box<dyn Stmt> {
-        &self.falsy
+    pub fn get_falsy_body(&self) -> &dyn Stmt {
+        &*self.falsy
     }
 
-    pub fn get_check(&self) -> &Box<dyn Expr> {
-        &self.check
+    pub fn get_check(&self) -> &dyn Expr {
+        &*self.check
     }
 }
 
@@ -381,7 +403,7 @@ impl Stmt for If {
 }
 
 pub struct Return {
-    result: Box<dyn Expr>
+    result: Box<dyn Expr>,
 }
 
 impl Return {
@@ -389,8 +411,8 @@ impl Return {
         Self { result }
     }
 
-    pub fn get_result(&self) -> &Box<dyn Expr> {
-        &self.result
+    pub fn get_result(&self) -> &dyn Expr {
+        &*self.result
     }
 }
 
@@ -413,7 +435,7 @@ impl Stmt for Return {
 }
 
 pub struct ExprStmt {
-    inner: Box<dyn Expr>
+    inner: Box<dyn Expr>,
 }
 
 impl ExprStmt {
@@ -421,8 +443,8 @@ impl ExprStmt {
         Self { inner }
     }
 
-    pub fn get_inner(&self) -> &Box<dyn Expr> {
-        &self.inner
+    pub fn get_inner(&self) -> &dyn Expr {
+        &*self.inner
     }
 }
 

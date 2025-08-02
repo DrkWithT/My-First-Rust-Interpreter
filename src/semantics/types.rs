@@ -4,7 +4,7 @@ pub enum PrimitiveTag {
     Unknown,
     Boolean,
     Integer,
-    Floating
+    Floating,
 }
 
 #[repr(i32)]
@@ -23,7 +23,7 @@ pub enum OperatorTag {
     Inequality,
     LessThan,
     GreaterThan,
-    Assign
+    Assign,
 }
 
 pub trait TypeKind {
@@ -34,7 +34,7 @@ pub trait TypeKind {
 }
 
 pub struct PrimitiveInfo {
-    tag: PrimitiveTag
+    tag: PrimitiveTag,
 }
 
 impl PrimitiveInfo {
@@ -63,14 +63,14 @@ impl TypeKind for PrimitiveInfo {
             PrimitiveTag::Boolean => String::from("bool"),
             PrimitiveTag::Integer => String::from("int"),
             PrimitiveTag::Floating => String::from("float"),
-            _ => String::from("any")
+            _ => String::from("any"),
         }
     }
 }
 
 pub struct ArrayInfo {
     item: Box<dyn TypeKind>,
-    n: usize
+    n: usize,
 }
 
 impl ArrayInfo {

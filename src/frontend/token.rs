@@ -1,6 +1,5 @@
 #[repr(i32)]
-#[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum TokenType {
     Unknown,
     Spaces,
@@ -33,7 +32,7 @@ pub enum TokenType {
     BraceClose,
     BracketOpen,
     BracketClose,
-    Eof
+    Eof,
 }
 
 impl TokenType {
@@ -70,7 +69,7 @@ impl TokenType {
             Self::BraceClose => String::from("BraceClose"),
             Self::BracketOpen => String::from("BracketOpen"),
             Self::BracketClose => String::from("BracketClose"),
-            Self::Eof => String::from("Eof")
+            Self::Eof => String::from("Eof"),
         }
     }
 }
@@ -85,7 +84,7 @@ pub struct Token {
     pub start: usize,
     pub length: usize,
     pub line_no: usize,
-    pub col_no: usize
+    pub col_no: usize,
 }
 
 impl Copy for Token {
@@ -120,7 +119,7 @@ macro_rules! token_from {
             start: $begin,
             length: $length,
             line_no: $line,
-            col_no: $col
+            col_no: $col,
         }
-    }
+    };
 }

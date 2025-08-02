@@ -1,14 +1,14 @@
+use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
-use std::collections::HashMap;
-use std::fs;
 
 pub mod frontend;
 pub mod semantics;
 
-use crate::frontend::token::*;
 use crate::frontend::parser::*;
+use crate::frontend::token::*;
 
 const MIN_ARG_COUNT: usize = 1;
 const MAX_ARG_COUNT: usize = 2;
@@ -17,10 +17,10 @@ const CONCH_VERSION_MINOR: i32 = 1;
 const CONCH_VERSION_PATCH: i32 = 0;
 
 fn main() -> ExitCode {
-    let mut arg_list= env::args();
+    let mut arg_list = env::args();
     let arg_count: usize = arg_list.len() - 1;
 
-    if arg_count < MIN_ARG_COUNT || arg_count > MAX_ARG_COUNT {
+    if !(MIN_ARG_COUNT..=MAX_ARG_COUNT).contains(&arg_count) {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
         return ExitCode::FAILURE;
     }
@@ -28,7 +28,9 @@ fn main() -> ExitCode {
     let first_arg_str = arg_list.nth(1).unwrap_or(String::from(""));
 
     if first_arg_str == "--version" {
-        println!("conchvm v.{}.{}.{}\nBy: DrkWithT (GitHub)", CONCH_VERSION_MAJOR, CONCH_VERSION_MINOR, CONCH_VERSION_PATCH);
+        println!(
+            "conchvm v.{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
+        );
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
@@ -62,7 +64,7 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from("else"), TokenType::Keyword);
     lexical_items.insert(String::from("return"), TokenType::Keyword);
     lexical_items.insert(String::from("exit"), TokenType::Keyword);
-    lexical_items.insert(String::from("bool"),TokenType::Typename);
+    lexical_items.insert(String::from("bool"), TokenType::Typename);
     lexical_items.insert(String::from("int"), TokenType::Typename);
     lexical_items.insert(String::from("float"), TokenType::Typename);
     lexical_items.insert(String::from("true"), TokenType::LiteralBool);
@@ -80,7 +82,8 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
+    let tokenizer =
+        frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
     let mut parser = Parser::new(tokenizer);
 
     let ast_opt = parser.parse_file();

@@ -1,4 +1,6 @@
-#[derive(Clone, PartialEq)]
+#[repr(i32)]
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum TokenType {
     Unknown,
     Spaces,
@@ -34,47 +36,48 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    pub fn eq(self: &Self, rhs: &Self) -> bool {
-        self == rhs
-    }
-
-    pub fn name(self: &Self) -> String {
+    pub fn name(&self) -> String {
         match self {
-            Self::Unknown => "Unknown".to_string(),
-            Self::Spaces => "Spaces".to_string(),
-            Self::Comment => "Comment".to_string(),
-            Self::Keyword => "Keyword".to_string(),
-            Self::Typename => "Typename".to_string(),
-            Self::Identifier => "Identifier".to_string(),
-            Self::LiteralBool => "LiteralBool".to_string(),
-            Self::LiteralInt => "LiteralInt".to_string(),
-            Self::LiteralFloat => "LiteralFloat".to_string(),
+            Self::Unknown => String::from("Unknown"),
+            Self::Spaces => String::from("Spaces"),
+            Self::Comment => String::from("Comment"),
+            Self::Keyword => String::from("Keyword"),
+            Self::Typename => String::from("Typename"),
+            Self::Identifier => String::from("Identifier"),
+            Self::LiteralBool => String::from("LiteralBool"),
+            Self::LiteralInt => String::from("LiteralInt"),
+            Self::LiteralFloat => String::from("LiteralFloat"),
             // LiteralString,
-            Self::OpAccess => "OpAccess".to_string(),
-            Self::OpIncrement => "OpIncrement".to_string(),
-            Self::OpDecrement => "OpDecrement".to_string(),
-            Self::OpTimes => "OpTimes".to_string(),
-            Self::OpSlash => "OpSlash".to_string(),
-            Self::OpPlus => "OpPlus".to_string(),
-            Self::OpMinus => "OpMinus".to_string(),
-            Self::OpEquality => "OpEquality".to_string(),
-            Self::OpInequality => "OpInequality".to_string(),
-            Self::OpLessThan => "OpLessThan".to_string(),
-            Self::OpGreaterThan => "OpGreaterThan".to_string(),
-            Self::OpAssign => "OpAssign".to_string(),
-            Self::Colon => "Colon".to_string(),
-            Self::Comma => "Comma".to_string(),
-            Self::ParenOpen => "ParenOpen".to_string(),
-            Self::ParenClose => "ParenClose".to_string(),
-            Self::BraceOpen => "BraceOpen".to_string(),
-            Self::BraceClose => "BraceClose".to_string(),
-            Self::BracketOpen => "BracketOpen".to_string(),
-            Self::BracketClose => "BracketClose".to_string(),
-            Self::Eof => "Eof".to_string()
+            Self::OpAccess => String::from("OpAccess"),
+            Self::OpIncrement => String::from("OpIncrement"),
+            Self::OpDecrement => String::from("OpDecrement"),
+            Self::OpTimes => String::from("OpTimes"),
+            Self::OpSlash => String::from("OpSlash"),
+            Self::OpPlus => String::from("OpPlus"),
+            Self::OpMinus => String::from("OpMinus"),
+            Self::OpEquality => String::from("OpEquality"),
+            Self::OpInequality => String::from("OpInequality"),
+            Self::OpLessThan => String::from("OpLessThan"),
+            Self::OpGreaterThan => String::from("OpGreaterThan"),
+            Self::OpAssign => String::from("OpAssign"),
+            Self::Colon => String::from("Colon"),
+            Self::Comma => String::from("Comma"),
+            Self::ParenOpen => String::from("ParenOpen"),
+            Self::ParenClose => String::from("ParenClose"),
+            Self::BraceOpen => String::from("BraceOpen"),
+            Self::BraceClose => String::from("BraceClose"),
+            Self::BracketOpen => String::from("BracketOpen"),
+            Self::BracketClose => String::from("BracketClose"),
+            Self::Eof => String::from("Eof")
         }
     }
 }
 
+impl Copy for TokenType {
+    // NOTE: this impl is a required dud to make the int32-based enum copyable.
+}
+
+#[derive(Clone)]
 pub struct Token {
     pub tag: TokenType,
     pub start: usize,
@@ -83,15 +86,19 @@ pub struct Token {
     pub col_no: usize
 }
 
+impl Copy for Token {
+    // NOTE: This is a dud for implementing copy operations for Token.
+}
+
 impl Token {
-    pub fn to_lexeme_str(self: Self, source: &str) -> Option<&str> {
+    pub fn to_lexeme_str(self, source: &str) -> Option<&str> {
         let lexeme_start = self.start;
         let lexeme_len = self.length;
 
         source.get(lexeme_start..(lexeme_start + lexeme_len))
     }
 
-    pub fn to_info_str(self: &Self) -> String {
+    pub fn to_info_str(&self) -> String {
         format!(
             "Token ({}, {}, {}, {}, {})",
             self.tag.name(),

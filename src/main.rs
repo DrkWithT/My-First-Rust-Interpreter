@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::fs;
 
 pub mod frontend;
+pub mod semantics;
+
 use crate::frontend::token::TokenType;
 
 const MIN_ARG_COUNT: usize = 1;
@@ -30,7 +32,7 @@ fn main() -> ExitCode {
 
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
-        println!("usage: ./conchvm [help | version | <file-name>]");
+        println!("usage: ./conchvm [--help | --version | <file-name>]");
 
         return ExitCode::SUCCESS;
     }
@@ -53,42 +55,34 @@ fn main() -> ExitCode {
     }
 
     let source_text = source_text_opt.expect("Failed to unbox source string?");
-    let source_view = source_text.as_str();
 
-    let mut lexical_items = HashMap::<&str, TokenType>::new();
+    let mut lexical_items = HashMap::<String, TokenType>::new();
 
-    lexical_items.insert("fun", TokenType::Keyword);
-    lexical_items.insert("let", TokenType::Keyword);
-    lexical_items.insert("if", TokenType::Keyword);
-    lexical_items.insert("else", TokenType::Keyword);
-    lexical_items.insert("return", TokenType::Keyword);
-    lexical_items.insert("exit", TokenType::Keyword);
-    lexical_items.insert("bool", TokenType::Typename);
-    lexical_items.insert("int", TokenType::Typename);
-    lexical_items.insert("float", TokenType::Typename);
-    lexical_items.insert("true", TokenType::LiteralBool);
-    lexical_items.insert("false", TokenType::LiteralBool);
-    lexical_items.insert(".", TokenType::OpAccess);
-    lexical_items.insert("++", TokenType::OpIncrement);
-    lexical_items.insert("--", TokenType::OpDecrement);
-    lexical_items.insert("*", TokenType::OpTimes);
-    lexical_items.insert("/", TokenType::OpSlash);
-    lexical_items.insert("+", TokenType::OpPlus);
-    lexical_items.insert("-", TokenType::OpMinus);
-    lexical_items.insert("==", TokenType::OpEquality);
-    lexical_items.insert("!=", TokenType::OpInequality);
-    lexical_items.insert("<", TokenType::OpLessThan);
-    lexical_items.insert(">", TokenType::OpGreaterThan);
-    lexical_items.insert("=", TokenType::OpAssign);
+    lexical_items.insert(String::from("fun"), TokenType::Keyword);
+    lexical_items.insert(String::from("let"), TokenType::Keyword);
+    lexical_items.insert(String::from("if"), TokenType::Keyword);
+    lexical_items.insert(String::from("else"), TokenType::Keyword);
+    lexical_items.insert(String::from("return"), TokenType::Keyword);
+    lexical_items.insert(String::from("exit"), TokenType::Keyword);
+    lexical_items.insert(String::from("bool"),TokenType::Typename);
+    lexical_items.insert(String::from("int"), TokenType::Typename);
+    lexical_items.insert(String::from("float"), TokenType::Typename);
+    lexical_items.insert(String::from("true"), TokenType::LiteralBool);
+    lexical_items.insert(String::from("false"), TokenType::LiteralBool);
+    lexical_items.insert(String::from("."), TokenType::OpAccess);
+    lexical_items.insert(String::from("++"), TokenType::OpIncrement);
+    lexical_items.insert(String::from("--"), TokenType::OpDecrement);
+    lexical_items.insert(String::from("*"), TokenType::OpTimes);
+    lexical_items.insert(String::from("/"), TokenType::OpSlash);
+    lexical_items.insert(String::from("+"), TokenType::OpPlus);
+    lexical_items.insert(String::from("-"), TokenType::OpMinus);
+    lexical_items.insert(String::from("=="), TokenType::OpEquality);
+    lexical_items.insert(String::from("!="), TokenType::OpInequality);
+    lexical_items.insert(String::from("<"), TokenType::OpLessThan);
+    lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
+    lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let mut tokenizer = frontend::lexer::Lexer {
-        items: lexical_items,
-        source_view: source_view,
-        pos: 0,
-        end: source_view.len(),
-        line: 1,
-        column: 1
-    };
+    let mut tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, 1, 1, 1);
 
     loop {
         let temp_token = tokenizer.next();

@@ -36,9 +36,9 @@
  - `compare_ne`
  - `compare_lt`
  - `compare_gt`
- - `jump_if <src-id> <new-ip>`
- - `jump_else <src-id> <new-ip>`
- - `jump <new-ip>`
+ - `jump_if <src-id> <dest?>`
+ - `jump_else <src-id> <dest?>`
+ - `jump <dest?>`
  - `return <src-id>`
  - `call <function-id>`
 

@@ -6,6 +6,8 @@ use std::fs;
 
 pub mod frontend;
 pub mod semantics;
+pub mod codegen;
+pub mod vm;
 
 use crate::frontend::token::*;
 use crate::frontend::parser::*;

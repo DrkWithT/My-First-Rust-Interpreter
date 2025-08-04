@@ -217,9 +217,10 @@ impl Parser {
         
         let current_tag = self.current().tag;
         let prefixed_op = match current_tag {
-            TokenType::OpMinus => OperatorTag::Minus,
+            TokenType::OpMinus => OperatorTag::Negate,
             TokenType::OpIncrement => OperatorTag::Increment,
-            _ => OperatorTag::Decrement,
+            TokenType::OpDecrement => OperatorTag::Decrement,
+            _ => OperatorTag::Noop,
         };
 
         self.consume_any();

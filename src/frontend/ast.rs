@@ -1,12 +1,6 @@
 use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types;
-
-#[derive(Clone)]
-pub enum VisitResult {
-    Void(),
-    Flag(bool),
-    Count(i32),
-}
+use crate::codegen::ir::Locator;
 
 pub struct ParamDecl {
     name_token: Token,
@@ -27,6 +21,7 @@ impl ParamDecl {
     }
 }
 
+/// TODO: implement ExprVisitor<bool> for semantic checks later...
 pub trait ExprVisitor<Res> {
     fn visit_primitive(&mut self, e: &Primitive) -> Res;
     fn visit_call(&mut self, e: &Call) -> Res;
@@ -39,7 +34,7 @@ pub trait ExprVisitor<Res> {
 pub trait Expr {
     fn get_operator(&self) -> types::OperatorTag;
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind>;
-    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<VisitResult>) -> VisitResult;
+    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator>;
 }
 
 pub struct Primitive {
@@ -74,7 +69,7 @@ impl Expr for Primitive {
         Box::new(types::PrimitiveInfo::new(deduced_type_tag))
     }
 
-    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_primitive(self)
     }
 }
@@ -107,7 +102,7 @@ impl Expr for Call {
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
     }
 
-    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_call(self)
     }
 }
@@ -161,7 +156,7 @@ impl Expr for Unary {
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
     }
 
-    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_unary(self)
     }
 }
@@ -196,11 +191,12 @@ impl Expr for Binary {
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
     }
 
-    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_binary(self)
     }
 }
 
+/// TODO: implement StmtVisitor<bool> for semantic checks later...
 pub trait StmtVisitor<Res> {
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;
@@ -214,7 +210,7 @@ pub trait Stmt {
     fn is_directive(&self) -> bool;
     fn is_declaration(&self) -> bool;
     fn is_expr_stmt(&self) -> bool;
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult;
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool;
 }
 
 pub struct FunctionDecl {
@@ -259,7 +255,7 @@ impl Stmt for FunctionDecl {
         false
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_function_decl(self)
     }
 }
@@ -291,7 +287,7 @@ impl Stmt for Block {
         false
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_block(self)
     }
 }
@@ -333,7 +329,7 @@ impl Stmt for VariableDecl {
         false
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_variable_decl(self)
     }
 }
@@ -375,7 +371,7 @@ impl Stmt for If {
         false
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_if(self)
     }
 }
@@ -407,7 +403,7 @@ impl Stmt for Return {
         false
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_return(self)
     }
 }
@@ -439,7 +435,7 @@ impl Stmt for ExprStmt {
         true
     }
 
-    fn accept_visitor(&self, v: &mut dyn StmtVisitor<VisitResult>) -> VisitResult {
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_expr_stmt(self)
     }
 }

@@ -13,6 +13,7 @@ pub enum OperatorTag {
     Noop,
     Access,
     Call,
+    Negate,
     Increment,
     Decrement,
     Times,

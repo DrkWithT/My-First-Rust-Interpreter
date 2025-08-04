@@ -40,6 +40,34 @@ pub enum Opcode {
 }
 
 impl Opcode {
+    // pub fn arity(&self) -> i32 {
+    //     match self {
+    //         Self::Nop => 0,
+    //         Self::LoadConst => 1,
+    //         Self::Push => 1,
+    //         Self::Pop => 0,
+    //         Self::Replace => 2,
+    //         Self::Neg => 1,
+    //         Self::Inc => 1,
+    //         Self::Dec => 1,
+    //         Self::Add => 0,
+    //         Self::Sub => 0,
+    //         Self::Mul => 0,
+    //         Self::Div => 0,
+    //         Self::BeginBlock => 0,
+    //         Self::EndBlock => 0,
+    //         Self::CompareEq => 0,
+    //         Self::CompareNe => 0,
+    //         Self::CompareLt => 0,
+    //         Self::CompareGt => 0,
+    //         Self::JumpIf => 2,
+    //         Self::JumpElse => 2,
+    //         Self::Jump => 1,
+    //         Self::Return => 1,
+    //         Self::Call => 1,
+    //     }
+    // }
+ 
     pub fn get_name(&self) -> &'static str {
         match self {
             Self::Nop => "NOP",

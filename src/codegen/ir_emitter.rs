@@ -61,6 +61,7 @@ impl IREmitter {
 
     fn leave_fun_scope(&mut self) {
         self.fun_locals.clear();
+        self.reset_stacked_offset();
     }
 
     fn record_name_locator(&mut self, name: String, item: Locator) {
@@ -68,6 +69,17 @@ impl IREmitter {
     }
 
     fn record_proto_constant(&mut self, item: Value) -> Locator {
+        let mut proto_id = 0;
+
+        #[allow(clippy::explicit_counter_loop)]
+        for existing_item in self.proto_constants.last().unwrap() {
+            if existing_item.is_equal(&item) {
+                return (Region::Immediate, proto_id);
+            }
+
+            proto_id += 1;
+        }
+
         let next_constant_id = self.proto_constants.last().as_ref().unwrap().len();
 
         self.proto_constants.last_mut().as_mut().unwrap().push(item);
@@ -101,6 +113,10 @@ impl IREmitter {
 
     fn get_stacked_offset(&self) -> i32 {
         self.relative_stack_offset
+    }
+
+    fn reset_stacked_offset(&mut self) {
+        self.relative_stack_offset = 0;
     }
 
     fn update_relative_offset(&mut self, count: i32) {
@@ -227,25 +243,24 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
             return None;
         }
 
-        self.emit_step(Instruction::Nonary(expr_opcode));
+        self.emit_step(Instruction::Unary(expr_opcode, result_locator.clone()));
 
         Some(result_locator)
     }
 
     fn visit_binary(&mut self, e: &Binary) -> Option<Locator> {
-        let result_slot_id = self.get_stacked_offset();
+        let result_locator = (Region::TempStack, self.get_stacked_offset());
+
         let lhs_locator_opt = e.get_lhs().accept_visitor(self);
-        
         lhs_locator_opt.as_ref()?;
 
         let rhs_locator_opt = e.get_rhs().accept_visitor(self);
-
         rhs_locator_opt.as_ref()?;
 
         let expr_opcode = ast_op_to_ir_op(e.get_operator());
         self.emit_step(Instruction::Nonary(expr_opcode));
 
-        Some((Region::TempStack, result_slot_id))
+        Some(result_locator)
     }
 
 }
@@ -304,6 +319,7 @@ impl StmtVisitor<bool> for IREmitter {
     }
 
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> bool {
+        let var_locator = (Region::TempStack, self.get_stacked_offset());
         let var_object_locator_opt = s.get_init_expr().accept_visitor(self);
 
         if var_object_locator_opt.is_none() {
@@ -311,10 +327,9 @@ impl StmtVisitor<bool> for IREmitter {
             return false;
         }
 
-        let var_object_locator = var_object_locator_opt.unwrap();
         let var_name = String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
 
-        self.record_name_locator(var_name, var_object_locator);
+        self.record_name_locator(var_name, var_locator);
 
         true
     }

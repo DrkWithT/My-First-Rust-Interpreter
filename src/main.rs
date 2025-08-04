@@ -11,6 +11,9 @@ pub mod vm;
 
 use crate::frontend::token::*;
 use crate::frontend::parser::*;
+// use crate::codegen::ir::{CFG, CFGStorage};
+use crate::codegen::ir_emitter::IREmitter;
+use crate::codegen::ir_printer::print_cfg;
 
 const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
@@ -94,6 +97,18 @@ fn main() -> ExitCode {
     let ast_decls = ast_opt.unwrap();
 
     println!("function declaration count: {}", ast_decls.len());
+
+    let mut ir_emitter = IREmitter::new(source_text.as_str());
+    let ir_opt = ir_emitter.emit_bytecode_from(&ast_decls);
+
+    // TODO: add printing for proto-constant Values...
+    if let Some(ir_stuff) = ir_opt {
+        let (ir_graphs, _) = ir_stuff;
+
+        for graph in &ir_graphs {
+            print_cfg(graph);
+        }
+    }
 
     ExitCode::SUCCESS
 }

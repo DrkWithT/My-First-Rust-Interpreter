@@ -5,6 +5,7 @@ use crate::semantics::types::OperatorTag;
 pub enum Region {
     Immediate,
     TempStack,
+    ArgStore,
     ObjectHeap,
     Functions,
     BlockId,
@@ -183,13 +184,19 @@ impl Node {
     }
 }
 
+/// NOTE: there is no default method since the CFG requires 1 root node at first.
 pub struct CFG {
     nodes: Vec<Node>,
     count: i32
 }
 
 impl CFG {
-    pub fn new(node_vec: Vec<Node>) -> Self {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        let node_vec = Vec::<Node>::from(
+            [Node::new(Vec::new(), -1, -1)]
+        );
+
         Self {
             nodes: node_vec,
             count: 0,

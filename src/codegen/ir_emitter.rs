@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::frontend::parser::ASTDecls;
 use crate::frontend::token::*;
 use crate::frontend::ast::*;
-use crate::frontend::parser::ParseResult;
 use crate::semantics::types::OperatorTag;
 use crate::codegen::ir::*;
 use crate::vm::value::Value;
@@ -10,7 +10,7 @@ use crate::vm::value::Value;
 type IRLinkPair = (i32, i32);
 type IRResult = (CFGStorage, Vec<Vec<Value>>);
 
-/// TODO 2: implement ExprVisitor<Locator> & StmtVisitor<Locator>...
+/// NOTE: add logic to find main function ID during visitation!
 pub struct IREmitter {
     fun_locals: HashMap<String, Locator>,
     fun_locations: HashMap<String, Locator>,
@@ -55,6 +55,7 @@ impl IREmitter {
     }
 
     fn enter_fun_scope(&mut self) {
+        self.result.push(CFG::new());
         self.proto_constants.push(Vec::new());
     }
 
@@ -110,9 +111,8 @@ impl IREmitter {
         self.result.last_mut().unwrap().add_instruction_recent(step);
     }
 
-    /// TODO: implement this.
-    pub fn emit_bytecode_from(&mut self, ast_tops: &ParseResult) -> Option<IRResult> {
-        for temp in ast_tops.as_ref().unwrap() {
+    pub fn emit_bytecode_from(&mut self, ast_tops: &ASTDecls) -> Option<IRResult> {
+        for temp in ast_tops {
             if !temp.accept_visitor(self) {
                 return None;
             }
@@ -246,9 +246,24 @@ impl StmtVisitor<bool> for IREmitter {
         self.enter_fun_scope();
 
         let function_name = String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
+        let is_func_name_recorded = self.record_fun_by_name(function_name);
+        let mut arg_id = 0;
+
+        #[allow(clippy::explicit_counter_loop)]
+        for param in s.get_params() {
+            let param_name = param.get_name_token().to_lexeme_str(&self.source_copy).unwrap();
+
+            self.record_name_locator(String::from(param_name), (Region::ArgStore, arg_id));
+
+            arg_id += 1;
+        }
+
+        if !s.get_body().accept_visitor(self) {
+            return false;
+        }
 
         self.leave_fun_scope();
-        self.record_fun_by_name(function_name)
+        is_func_name_recorded
     }
 
     fn visit_block(&mut self, s: &Block) -> bool {

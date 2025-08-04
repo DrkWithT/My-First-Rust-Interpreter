@@ -12,7 +12,7 @@ pub enum Region {
 }
 
 #[repr(i32)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Opcode {
     Nop,
     LoadConst,
@@ -40,33 +40,62 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    // pub fn arity(&self) -> i32 {
-    //     match self {
-    //         Self::Nop => 0,
-    //         Self::LoadConst => 1,
-    //         Self::Push => 1,
-    //         Self::Pop => 0,
-    //         Self::Replace => 2,
-    //         Self::Neg => 1,
-    //         Self::Inc => 1,
-    //         Self::Dec => 1,
-    //         Self::Add => 0,
-    //         Self::Sub => 0,
-    //         Self::Mul => 0,
-    //         Self::Div => 0,
-    //         Self::BeginBlock => 0,
-    //         Self::EndBlock => 0,
-    //         Self::CompareEq => 0,
-    //         Self::CompareNe => 0,
-    //         Self::CompareLt => 0,
-    //         Self::CompareGt => 0,
-    //         Self::JumpIf => 2,
-    //         Self::JumpElse => 2,
-    //         Self::Jump => 1,
-    //         Self::Return => 1,
-    //         Self::Call => 1,
-    //     }
-    // }
+    pub fn arity(&self) -> i32 {
+        match self {
+            Self::Nop => 0,
+            Self::LoadConst => 1,
+            Self::Push => 1,
+            Self::Pop => 0,
+            Self::Replace => 2,
+            Self::Neg => 1,
+            Self::Inc => 1,
+            Self::Dec => 1,
+            Self::Add => 0,
+            Self::Sub => 0,
+            Self::Mul => 0,
+            Self::Div => 0,
+            Self::BeginBlock => 0,
+            Self::EndBlock => 0,
+            Self::CompareEq => 0,
+            Self::CompareNe => 0,
+            Self::CompareLt => 0,
+            Self::CompareGt => 0,
+            Self::JumpIf => 2,
+            Self::JumpElse => 2,
+            Self::Jump => 1,
+            Self::Return => 1,
+            Self::Call => 1,
+        }
+    }
+
+    /// NOTE: `-1000` is a dud value which denotes that the relative stack base to offset from is reset for the `Opcode`.
+    pub fn get_stack_delta(&self) -> i32 {
+        match self {
+            Self::Nop => 0,
+            Self::LoadConst => 1,
+            Self::Push => 1,
+            Self::Pop => -1,
+            Self::Replace => 0,
+            Self::Neg => 0,
+            Self::Inc => 0,
+            Self::Dec => 0,
+            Self::Add => -1,
+            Self::Sub => -1,
+            Self::Mul => -1,
+            Self::Div => -1,
+            Self::BeginBlock => 0,
+            Self::EndBlock => 0,
+            Self::CompareEq => -1,
+            Self::CompareNe => -1,
+            Self::CompareLt => -1,
+            Self::CompareGt => -1,
+            Self::JumpIf => -1,
+            Self::JumpElse => -1,
+            Self::Jump => 0,
+            Self::Return => -1000,
+            Self::Call => -1000,
+        }
+    }
  
     pub fn get_name(&self) -> &'static str {
         match self {
@@ -113,6 +142,7 @@ pub fn ast_op_to_ir_op(arg: OperatorTag) -> Opcode {
         OperatorTag::Inequality => Opcode::CompareNe,
         OperatorTag::LessThan => Opcode::CompareLt,
         OperatorTag::GreaterThan => Opcode::CompareGt,
+        OperatorTag::Assign => Opcode::Replace,
         _ => Opcode::Nop,
     }
 }
@@ -128,9 +158,9 @@ pub enum Instruction {
 impl Instruction {
     pub fn get_opcode(&self) -> Opcode {
         match self {
-            Self::Nonary(op) => op.clone(),
-            Self::Unary(op, _) => op.clone(),
-            Self::Binary(op, _, _) => op.clone()
+            Self::Nonary(op) => *op,
+            Self::Unary(op, _) => *op,
+            Self::Binary(op, _, _) => *op,
         }
     }
 
@@ -176,6 +206,10 @@ impl Node {
 
     pub fn get_steps(&self) -> &Vec<Instruction> {
         &self.steps
+    }
+
+    pub fn get_steps_mut(&mut self) -> &mut Vec<Instruction> {
+        &mut self.steps
     }
 
     pub fn set_left_neighbor_id(&mut self, id: i32) {
@@ -234,8 +268,16 @@ impl CFG {
         self.nodes.first()
     }
 
+    pub fn get_newest_node_tip_pos(&self) -> i32 {
+        self.nodes.last().unwrap().get_steps().len() as i32 - 1
+    }
+
     pub fn get_newest_node_mut(&mut self) -> &mut Node {
         self.nodes.get_mut(self.count as usize).unwrap()
+    }
+
+    pub fn get_node_mut(&mut self, block_id: i32) -> Option<&mut Node> {
+        self.nodes.get_mut(block_id as usize)
     }
 
     pub fn add_instruction_recent(&mut self, arg: Instruction) {

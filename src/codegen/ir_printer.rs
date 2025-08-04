@@ -15,7 +15,13 @@ fn format_locator(loc: &Locator) -> String {
     }
 }
 
-fn print_ir_node(node: &Node) {
+fn print_ir_node(node: &Node, id: i32) -> bool {
+    let truthy_id = node.get_truthy_id().unwrap_or(-1);
+    let falsy_id = node.get_falsy_id().unwrap_or(-1);
+    
+    println!("Block {id}:");
+    println!("truthy-link: {truthy_id}, falsy-link: {falsy_id}\n");
+
     for step in node.get_steps() {
         match step {
             Instruction::Nonary(op) => {
@@ -29,6 +35,10 @@ fn print_ir_node(node: &Node) {
             }
         }
     }
+
+    println!();
+
+    truthy_id != -1 || falsy_id != -1
 }
 
 pub fn print_cfg(function_cfg: &CFG) {
@@ -36,7 +46,7 @@ pub fn print_cfg(function_cfg: &CFG) {
     next_nodes.push_back(function_cfg.get_root().unwrap());
     let mut next_id = 0;
 
-    println!("IR:\n");
+    println!("\nIR:\n");
 
     while !next_nodes.is_empty() {
         let next_temp_opt = next_nodes.pop_front();
@@ -45,10 +55,12 @@ pub fn print_cfg(function_cfg: &CFG) {
             continue;
         }
 
-        println!("\nBlock {next_id}:\n");
-
         let next_temp_ref = next_temp_opt.unwrap();
-        print_ir_node(next_temp_ref);
+
+        if !print_ir_node(next_temp_ref, next_id) {
+            break;
+        }
+
         next_id += 1;
 
         let next_left_opt = function_cfg.get_left_neighbor(next_temp_ref);

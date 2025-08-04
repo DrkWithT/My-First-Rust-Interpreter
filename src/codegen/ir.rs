@@ -184,7 +184,6 @@ impl Node {
     }
 }
 
-/// NOTE: there is no default method since the CFG requires 1 root node at first.
 pub struct CFG {
     nodes: Vec<Node>,
     count: i32
@@ -193,12 +192,8 @@ pub struct CFG {
 impl CFG {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        let node_vec = Vec::<Node>::from(
-            [Node::new(Vec::new(), -1, -1)]
-        );
-
         Self {
-            nodes: node_vec,
+            nodes: Vec::new(),
             count: 0,
         }
     }

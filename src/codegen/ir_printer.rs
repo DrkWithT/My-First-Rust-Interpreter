@@ -22,10 +22,10 @@ fn print_ir_node(node: &Node) {
                 println!("{}", op.get_name());
             },
             Instruction::Unary(op, arg_0) => {
-                print!("{} {}", op.get_name(), format_locator(arg_0));
+                println!("{} {}", op.get_name(), format_locator(arg_0));
             },
             Instruction::Binary(op, arg_0, arg_1) => {
-                print!("{} {} {}", op.get_name(), format_locator(arg_0), format_locator(arg_1));
+                println!("{} {} {}", op.get_name(), format_locator(arg_0), format_locator(arg_1));
             }
         }
     }

@@ -124,12 +124,12 @@ impl Parser {
 
             return parenthesized_expr;
         }
+        
+        let token_copy = *self.current();
 
         if !self.consume_of([TokenType::LiteralBool, TokenType::LiteralInt, TokenType::LiteralFloat, TokenType::Identifier]) {
             return None;
         }
-
-        let token_copy = *self.current();
 
         Some(Box::new(
             Primitive::new(token_copy)

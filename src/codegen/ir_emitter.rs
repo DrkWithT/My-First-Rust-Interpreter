@@ -114,6 +114,7 @@ impl IREmitter {
     pub fn emit_bytecode_from(&mut self, ast_tops: &ASTDecls) -> Option<IRResult> {
         for temp in ast_tops {
             if !temp.accept_visitor(self) {
+                eprintln!("Oops: failed to generate function from declaration");
                 return None;
             }
         }
@@ -127,6 +128,8 @@ impl IREmitter {
 
 impl ExprVisitor<Option<Locator>> for IREmitter {
     fn visit_primitive(&mut self, e: &Primitive) -> Option<Locator> {
+        println!("Info: entered visit_primitive(...)");
+
         let literal_token_ref = e.get_token();
         let literal_lexeme = literal_token_ref.to_lexeme_str(&self.source_copy).unwrap();
         let literal_token_tag = literal_token_ref.tag;
@@ -142,6 +145,7 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
                 Some(temp_flag_locator)
             },
             TokenType::LiteralInt => {
+                println!("Info: visit_primitive(...):\n\t int case");
                 let temp_int: i32 = literal_lexeme.parse::<>().unwrap();
                 let temp_int_locator = self.record_proto_constant(Value::Int(temp_int));
 
@@ -159,7 +163,8 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
 
                 Some(temp_float_locator)
             },
-            _ => {
+            TokenType::Identifier => {
+                println!("Info: visit_primitive(...)\n\tcase: identifier");
                 let named_locator_opt = self.lookup_locator_of(literal_lexeme);
 
                 named_locator_opt.as_ref()?;
@@ -170,6 +175,10 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
                 self.update_relative_offset(1);
 
                 Some(named_locator)
+            },
+            _ => {
+                println!("Info: visit_primitive(...):\n\tcase: _");
+                None
             }
         }
     }
@@ -258,9 +267,14 @@ impl StmtVisitor<bool> for IREmitter {
             arg_id += 1;
         }
 
+        println!("Info: visit_function_decl(...):\n\t{arg_id} args processed");
+
         if !s.get_body().accept_visitor(self) {
+            eprintln!("Oops: failed to generate function body from declaration");
             return false;
         }
+
+        println!("Info: visit_function_decl(...):\n\tbody processed");
 
         self.leave_fun_scope();
         is_func_name_recorded
@@ -268,6 +282,7 @@ impl StmtVisitor<bool> for IREmitter {
 
     fn visit_block(&mut self, s: &Block) -> bool {
         if s.get_items().is_empty() {
+            eprintln!("Oops: visit_block(...), empty block stmt found");
             return false;
         }
 
@@ -278,6 +293,7 @@ impl StmtVisitor<bool> for IREmitter {
         self.emit_step(Instruction::Nonary(Opcode::BeginBlock));
         for temp_stmt in s.get_items() {
             if !temp_stmt.accept_visitor(self) {
+                eprintln!("Oops: failed to generate nested block");
                 self.has_error = true;
                 return false;
             }
@@ -307,6 +323,7 @@ impl StmtVisitor<bool> for IREmitter {
         let condition_value_locator_opt = s.get_check().accept_visitor(self);
 
         if condition_value_locator_opt.is_none() {
+            eprintln!("Oops: failed to generate if-check");
             self.has_error = true;
             return false;
         }
@@ -316,6 +333,7 @@ impl StmtVisitor<bool> for IREmitter {
         self.emit_step(Instruction::Binary(Opcode::JumpElse, condition_value_locator_opt.unwrap(), (Region::BlockId, if_block_id)));
 
         if !s.get_truthy_body().accept_visitor(self) {
+            eprintln!("Oops: failed to generate if-true block");
             return false;
         }
 
@@ -334,6 +352,9 @@ impl StmtVisitor<bool> for IREmitter {
             self.apply_proto_links();
 
             return true;
+        } else if self.has_error {
+            eprintln!("Oops: failed to generate else-block");
+            return false;
         }
 
         let else_block_id = self.result.last().unwrap().get_node_count() - 1;
@@ -350,9 +371,12 @@ impl StmtVisitor<bool> for IREmitter {
     }
 
     fn visit_return(&mut self, s: &Return) -> bool {
+        println!("Info: visit_return(...)");
+
         let result_locator_opt = s.get_result().accept_visitor(self);
 
         if result_locator_opt.is_none() {
+            eprintln!("Oops: failed to find locator for return result");
             return false;
         }
 

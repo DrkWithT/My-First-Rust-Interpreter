@@ -20,6 +20,7 @@ pub enum Value {
     Float(f32),
     // Str(HeapRef),
     // Array(HeapRef),
+    // Callable(HeapRef),
 }
 
 impl From<Value> for bool {

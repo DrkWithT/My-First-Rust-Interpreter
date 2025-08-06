@@ -1,5 +1,5 @@
-use crate::vm::callable::*;
-use crate::vm::engine::Engine;
+// use crate::vm::callable::*;
+// use crate::vm::engine::Engine;
 use crate::vm::value::Value;
 
 #[repr(i32)]
@@ -51,7 +51,7 @@ pub enum Instruction {
     JumpElse(Argument, Argument),
     Jump(Argument),
     Return(Argument),
-    Call(Argument),
+    Call(Argument, Argument),
     // NativeCall(i32),
 }
 
@@ -72,6 +72,10 @@ impl Chunk {
         self.constants.get(arg as usize).unwrap()
     }
 
+    pub fn get_constant_mut(&mut self, arg: i32) -> &mut Value {
+        self.constants.get_mut(arg as usize).unwrap()
+    }
+
     pub fn get_code(&self) -> &Vec<Instruction> {
         &self.code
     }
@@ -82,16 +86,6 @@ pub struct Procedure {
     id: i32,
 }
 
-impl Callable<Engine> for Procedure {
-    fn invoke(&self, vm: &mut Engine) -> ExecStatus {
-        vm.dispatch_virtual(self)
-    }
-
-    fn get_id(&self) -> i32 {
-        self.id
-    }
-}
-
 impl Procedure {
     pub fn new(chunk_arg: Chunk, id_arg: i32) -> Self {
         Self {
@@ -100,8 +94,16 @@ impl Procedure {
         }
     }
 
+    pub fn get_chunk_mut(&mut self) -> &mut Chunk {
+        &mut self.chunk
+    }
+
     pub fn get_chunk(&self) -> &Chunk {
         &self.chunk
+    }
+
+    pub fn get_id(&self) -> i32 {
+        self.id
     }
 }
 
@@ -121,6 +123,10 @@ impl Program {
 
     pub fn get_procedures(&self) -> &Vec<Procedure> {
         &self.procedures
+    }
+
+    pub fn get_procedures_mut(&mut self) -> &mut Vec<Procedure> {
+        &mut self.procedures
     }
 
     pub fn get_entry_procedure_id(&self) -> Option<i32> {

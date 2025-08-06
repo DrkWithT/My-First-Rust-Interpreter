@@ -220,7 +220,7 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
             calling_arg_count += 1;
         }
 
-        self.emit_step(Instruction::Unary(Opcode::Call, callee_locator));
+        self.emit_step(Instruction::Binary(Opcode::Call, callee_locator, (Region::Immediate, calling_arg_count)));
         self.update_relative_offset(1 - calling_arg_count);
 
         Some((Region::TempStack, self.get_stacked_offset() - 1))

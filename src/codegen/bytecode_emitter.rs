@@ -145,9 +145,6 @@ impl BytecodeEmitter {
             Opcode::Return => {
                 self.temp_instructions.push(bytecode::Instruction::Return(converted_arg_0));
             },
-            Opcode::Call => {
-                self.temp_instructions.push(bytecode::Instruction::Call(converted_arg_0));
-            },
             _ => {
                 return false;
             },
@@ -177,6 +174,9 @@ impl BytecodeEmitter {
                     instruction_pos: self.get_last_instruction_pos(),
                     patching_value: -1,
                 });
+            },
+            Opcode::Call => {
+                self.temp_instructions.push(bytecode::Instruction::Call(converted_arg_0, converted_arg_1));
             },
             _ => {
                 return false;

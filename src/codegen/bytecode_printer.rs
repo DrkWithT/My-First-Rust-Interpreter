@@ -1,4 +1,3 @@
-use crate::vm::callable::Callable;
 use crate::vm::bytecode::{ArgMode, Chunk, Instruction, Program};
 
 fn disassemble_op_arg(arg: &(ArgMode, i32)) {
@@ -92,9 +91,10 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 disassemble_op_arg(arg_0);
                 println!();
             },
-            Instruction::Call(arg_0) => {
+            Instruction::Call(arg_0, arg_1) => {
                 print!("CALL ");
                 disassemble_op_arg(arg_0);
+                disassemble_op_arg(arg_1);
                 println!();
             },
         }

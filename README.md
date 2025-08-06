@@ -49,8 +49,9 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ```
 
 ### Roadmap
- - Add naive bytecode generation
- - Add VM
+ - **Finish naive bytecode generation:**
+   - _Fix branch jump generation._
+ - Finish VM
  - Add simple checks for types and declarations
  - Support arrays
  - Support strings

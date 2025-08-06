@@ -15,10 +15,12 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
             Instruction::LoadConst(arg_0) => {
                 print!("LOAD_CONST ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Push(arg_0) => {
                 print!("PUSH ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Pop => {
                 println!("POP");
@@ -27,18 +29,22 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 print!("REPLACE ");
                 disassemble_op_arg(arg_0);
                 disassemble_op_arg(arg_1);
+                println!();
             },
             Instruction::Neg(arg_0) => {
                 print!("NEG ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Inc(arg_0) => {
                 print!("INC ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Dec(arg_0) => {
                 print!("DEC ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Add => {
                 println!("ADD");
@@ -68,23 +74,28 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 print!("JMP_IF ");
                 disassemble_op_arg(arg_0);
                 disassemble_op_arg(arg_1);
+                println!();
             },
             Instruction::JumpElse(arg_0, arg_1) => {
                 print!("JMP_ELSE ");
                 disassemble_op_arg(arg_0);
                 disassemble_op_arg(arg_1);
+                println!();
             },
             Instruction::Jump(arg_0) => {
                 print!("JMP ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Return(arg_0) => {
                 print!("RETURN ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
             Instruction::Call(arg_0) => {
                 print!("CALL ");
                 disassemble_op_arg(arg_0);
+                println!();
             },
         }
     }

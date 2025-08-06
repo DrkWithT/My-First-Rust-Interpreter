@@ -30,6 +30,7 @@ fn convert_ir_arg_tag(arg: Region) -> ArgMode {
         // Region::ObjectHeap => ArgMode::HeapId,
         Region::Functions => ArgMode::ProcedureId,
         // Region::BlockId => ArgMode::Foo,
+        Region::BlockId => ArgMode::CodeOffset,
         _ => ArgMode::Dud,
     }
 }

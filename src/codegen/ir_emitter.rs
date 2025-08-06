@@ -407,6 +407,8 @@ impl StmtVisitor<bool> for IREmitter {
 
         let post_if_block_id = block_2_id + 1;
         self.result.last_mut().unwrap().add_node(Node::new(Vec::new(), -1, -1));
+        self.emit_step(Instruction::Nonary(Opcode::Nop));
+        self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
         self.record_proto_link(block_1_id, post_if_block_id);
         self.record_proto_link(block_2_id, post_if_block_id);

@@ -56,3 +56,7 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - Support arrays
  - Support strings
  - Support first-class lambdas
+
+### Other Docs
+ - [Runtime Info](./docs/Runtime.md)
+ - [Progress Images](./docs/Progress.md)

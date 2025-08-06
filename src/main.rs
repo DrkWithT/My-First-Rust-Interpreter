@@ -15,6 +15,8 @@ use crate::codegen::ir_emitter::IREmitter;
 use crate::codegen::ir_printer::print_cfg;
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
 use crate::codegen::bytecode_printer::disassemble_program;
+use crate::vm::callable::ExecStatus;
+use crate::vm::engine::Engine;
 
 const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
@@ -115,10 +117,45 @@ fn main() -> ExitCode {
 
     let mut bc_emitter = BytecodeEmitter::default();
 
-    if let Some(program) = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id) {
-        disassemble_program(&program);
-        return ExitCode::SUCCESS;
+    let program_opt = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id);
+    
+    if program_opt.is_none() {
+        eprintln!("Error: Failed to compile program.");
+        return ExitCode::FAILURE;
     }
 
-    ExitCode::FAILURE
+    let program = program_opt.unwrap();
+
+    disassemble_program(&program);
+
+    let mut engine = Engine::new(program, 8192);
+    
+    let engine_status = engine.run();
+
+    match engine_status {
+        ExecStatus::Ok => {
+            println!("OK");
+            ExitCode::SUCCESS
+        },
+        ExecStatus::AccessError => {
+            eprintln!("RunError: AccessError of stack operation.");
+            ExitCode::FAILURE
+        },
+        ExecStatus::ValueError => {
+            eprintln!("RunError: Invalid Value materialized.");
+            ExitCode::FAILURE
+        },
+        ExecStatus::BadMath => {
+            eprintln!("RunError: Division by zero.");
+            ExitCode::FAILURE
+        },
+        ExecStatus::IllegalInstruction => {
+            eprintln!("RunError: Illegal instruction fetched.");
+            ExitCode::FAILURE
+        },
+        ExecStatus::BadArgs => {
+            eprintln!("RunError: Invalid argument passed to opcode.");
+            ExitCode::FAILURE
+        },
+    }
 }

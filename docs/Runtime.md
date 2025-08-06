@@ -40,12 +40,12 @@
  - `jump_else <src-id> <dest?>`
  - `jump <dest?>`
  - `return <src-id>`
- - `call <function-id>`
+ - `call <function-id> <argc>`
 
 ### Opcodes
  - `load_const <constant-id>`
  - `pop`
- - `replace <dest-slot> <src-slot>`
+ - `replace <dest-slot> <src-loc>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`
@@ -61,4 +61,4 @@
  - `jump_else <src-slot> <new-ip>`
  - `jump <new-ip>`
  - `return <src-slot>`
- - `call <function-id>`
+ - `call <function-id> <argc>`

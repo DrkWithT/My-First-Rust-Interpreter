@@ -11,9 +11,10 @@ pub mod vm;
 
 use crate::frontend::token::*;
 use crate::frontend::parser::*;
-// use crate::codegen::ir::{CFG, CFGStorage};
 use crate::codegen::ir_emitter::IREmitter;
 use crate::codegen::ir_printer::print_cfg;
+use crate::codegen::bytecode_emitter::BytecodeEmitter;
+use crate::codegen::bytecode_printer::disassemble_program;
 
 const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
@@ -101,14 +102,23 @@ fn main() -> ExitCode {
     let mut ir_emitter = IREmitter::new(source_text.as_str());
     let ir_opt = ir_emitter.emit_bytecode_from(&ast_decls);
 
-    // TODO: add printing for proto-constant Values...
-    if let Some(ir_stuff) = ir_opt {
-        let (ir_graphs, _) = ir_stuff;
-
-        for graph in &ir_graphs {
-            print_cfg(graph);
-        }
+    if ir_opt.is_none() {
+        return ExitCode::FAILURE;
     }
 
-    ExitCode::SUCCESS
+    let (cfg_list, mut constant_groups_list, main_id) = ir_opt.unwrap();
+
+    // TODO: add printing for Value constant region.
+    for graph in &cfg_list {
+        print_cfg(graph);
+    }
+
+    let mut bc_emitter = BytecodeEmitter::default();
+
+    if let Some(program) = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id) {
+        disassemble_program(&program);
+        return ExitCode::SUCCESS;
+    }
+
+    ExitCode::FAILURE
 }

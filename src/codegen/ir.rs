@@ -27,7 +27,7 @@ pub enum Opcode {
     Mul,
     Div,
     BeginBlock,
-    EndBlock,
+    GenPatch,
     CompareEq,
     CompareNe,
     CompareLt,
@@ -55,7 +55,7 @@ impl Opcode {
             Self::Mul => 0,
             Self::Div => 0,
             Self::BeginBlock => 0,
-            Self::EndBlock => 0,
+            Self::GenPatch => 0,
             Self::CompareEq => 0,
             Self::CompareNe => 0,
             Self::CompareLt => 0,
@@ -84,7 +84,7 @@ impl Opcode {
             Self::Mul => -1,
             Self::Div => -1,
             Self::BeginBlock => 0,
-            Self::EndBlock => 0,
+            Self::GenPatch => 0,
             Self::CompareEq => -1,
             Self::CompareNe => -1,
             Self::CompareLt => -1,
@@ -112,7 +112,7 @@ impl Opcode {
             Self::Mul => "MUL",
             Self::Div => "DIV",
             Self::BeginBlock => "BEGIN_BLOCK",
-            Self::EndBlock => "END_BLOCK",
+            Self::GenPatch => "END_BLOCK",
             Self::CompareEq => "CMP_EQ",
             Self::CompareNe => "CMP_NE",
             Self::CompareLt => "CMP_LT",
@@ -276,9 +276,14 @@ impl CFG {
         self.nodes.get_mut(self.count as usize).unwrap()
     }
 
+    pub fn get_node_ref(&self, block_id: i32) -> Option<&Node> {
+        self.nodes.get(block_id as usize)
+    }
+
     pub fn get_node_mut(&mut self, block_id: i32) -> Option<&mut Node> {
         self.nodes.get_mut(block_id as usize)
     }
+
 
     pub fn add_instruction_recent(&mut self, arg: Instruction) {
         if self.nodes.is_empty() {

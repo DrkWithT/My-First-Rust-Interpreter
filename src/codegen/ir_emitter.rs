@@ -8,7 +8,7 @@ use crate::codegen::ir::*;
 use crate::vm::value::Value;
 
 type IRLinkPair = (i32, i32);
-type IRResult = (CFGStorage, Vec<Vec<Value>>);
+pub type IRResult = (CFGStorage, Vec<Vec<Value>>, i32);
 
 /// NOTE: add logic to find main function ID during visitation!
 pub struct IREmitter {
@@ -26,6 +26,8 @@ pub struct IREmitter {
 
     /// NOTE tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
+
+    main_id: i32,
     has_error: bool,
 }
 
@@ -39,18 +41,24 @@ impl IREmitter {
             proto_links: Vec::<IRLinkPair>::new(),
             source_copy: String::from(old_src),
             relative_stack_offset: 0,
+            main_id: -1,
             has_error: false,
         }
     }
 
     fn record_fun_by_name(&mut self, name: String) -> bool {
-        let next_fun_id = self.fun_locations.len();
-
         if self.fun_locations.contains_key(name.as_str()) {
             return false;
         }
 
+        let next_fun_id = self.fun_locations.len();
+
+        if self.main_id == -1 && name.as_str() == "main" {
+            self.main_id = next_fun_id as i32;
+        }
+
         self.fun_locations.insert(name, (Region::Functions, next_fun_id as i32));
+
         true
     }
 
@@ -135,9 +143,12 @@ impl IREmitter {
             }
         }
 
+        let saved_main_id = self.main_id;
+
         Some((
             std::mem::take(&mut self.result),
             std::mem::take(&mut self.proto_constants),
+            saved_main_id,
         ))
     }
 }
@@ -321,7 +332,6 @@ impl StmtVisitor<bool> for IREmitter {
                 return false;
             }
         }
-        self.emit_step(Instruction::Nonary(Opcode::EndBlock));
 
         true
     }
@@ -361,8 +371,10 @@ impl StmtVisitor<bool> for IREmitter {
             return false;
         }
 
-        self.emit_step(Instruction::Unary(Opcode::Jump, (Region::BlockId, -1)));
+        // NOTE: Here, I must patch the jump_else from before the if-block to go to a NOP before a possible JUMP skipping the else-block if available. This is done for correctness.
         self.emit_step(Instruction::Nonary(Opcode::Nop));
+        self.emit_step(Instruction::Nonary(Opcode::GenPatch));
+        self.emit_step(Instruction::Unary(Opcode::Jump, (Region::BlockId, -1)));
 
         self.record_proto_link(pre_if_block_id, if_block_id);
 
@@ -373,6 +385,8 @@ impl StmtVisitor<bool> for IREmitter {
             self.result.last_mut().unwrap().add_node(
                 Node::new(Vec::new(), -1, -1)
             );
+            self.emit_step(Instruction::Nonary(Opcode::Nop));
+            self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
             self.record_proto_link(pre_if_block_id, if_fallthrough_id);
             self.record_proto_link(if_block_id, if_fallthrough_id);
@@ -384,6 +398,9 @@ impl StmtVisitor<bool> for IREmitter {
 
             return false;
         }
+
+        self.emit_step(Instruction::Nonary(Opcode::Nop));
+        self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
         let else_block_id = self.result.last().unwrap().get_node_count() - 1;
         self.record_proto_link(pre_if_block_id, else_block_id);

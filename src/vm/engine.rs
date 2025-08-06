@@ -2,48 +2,23 @@ use std::collections::VecDeque;
 
 use crate::vm::value::Value;
 use crate::vm::callable::ExecStatus;
-use crate::vm::bytecode::{Procedure, Program};
+use crate::vm::bytecode::{self, ArgMode, Program};
 
-#[allow(clippy::empty_line_after_doc_comments)]
-/**
- * VM Opcode Notes:
- * Self::Nop => 0
- * Self::LoadConst => 1
- * Self::Push => 2
- * Self::Pop => 3
- * Self::Replace => 4
- * Self::Neg => 5
- * Self::Inc => 6
- * Self::Dec => 7
- * Self::Add => 8
- * Self::Sub => 9
- * Self::Mul => 10
- * Self::Div => 11
- * Self::CompareEq => 12
- * Self::CompareNe => 13
- * Self::CompareLt => 14
- * Self::CompareGt => 15
- * Self::JumpIf => 16
- * Self::JumpElse => 17
- * Self::Jump => 18
- * Self::Return => 19
- * Self::Call => 20
- * Self::NativeCall => 21 (TODO)
- */
-
-#[allow(dead_code)]
 struct CallFrame {
+    /// NOTE: Tracks current callee's arguments.
     pub callee_args: Vec<Value>,
-    pub callee_id: i32,
-    pub callee_pos: i32,
+
+    /// NOTE: Tracks caller procedure ID.
+    pub caller_id: i32,
+
+    /// NOTE: Tracks caller procedure ret-address.
+    pub caller_pos: i32,
 }
 
-/// TODO: implement the Engine!!
-#[allow(dead_code)]
 pub struct Engine {
     program: Program,
     frames: VecDeque<CallFrame>,
-    stack: VecDeque<Value>,
+    stack: Vec<Value>,
 
     /// INFO: Holds the current Procedure index.
     rpid: i32,
@@ -54,12 +29,17 @@ pub struct Engine {
     /// INFO: Holds the "base-pointer" into the Value stack for the current procedure call.
     rbp: i32,
 
+    /// INFO: Denotes the top of the stack.
+    rsp: i32,
+
+    stack_limit: i16,
+
     /// INFO: Indicates execution status, including when to abort the program early.
     status: ExecStatus,
 }
 
 impl Engine {
-    pub fn new(program_arg: Program) -> Self {
+    pub fn new(program_arg: Program, stack_size: i16) -> Self {
         let program_main_id_opt = program_arg.get_entry_procedure_id();
 
         let mut initial_frames = VecDeque::<CallFrame>::new();
@@ -70,52 +50,552 @@ impl Engine {
 
             initial_frames.push_back(CallFrame {
                 callee_args: Vec::new(),
-                callee_id: main_id,
-                callee_pos: 0,
+                caller_id: -1,
+                caller_pos: -1,
             });
         }
 
         Self {
             program: program_arg,
             frames: initial_frames,
-            stack: VecDeque::new(),
+            stack: Vec::with_capacity(stack_size as usize),
             rpid: saved_main_id,
             rip: 0,
             rbp: 0,
+            rsp: -1,
+            stack_limit: stack_size,
             status: ExecStatus::Ok,
         }
     }
 
-    // fn do_load_const(&mut self) {}
-    // fn do_push(&mut self) {}
-    // fn do_pop(&mut self) {}
-    // fn do_replace(&mut self) {}
-    // fn do_neg(&mut self) {}
-    // fn do_inc(&mut self) {}
-    // fn do_dec(&mut self) {}
-    // fn do_add(&mut self) {}
-    // fn do_sub(&mut self) {}
-    // fn do_mul(&mut self) {}
-    // fn do_div(&mut self) {}
-    // fn do_cmp_eq(&mut self) {}
-    // fn do_cmp_ne(&mut self) {}
-    // fn do_cmp_lt(&mut self) {}
-    // fn do_cmp_gt(&mut self) {}
-    // fn do_jump_if(&mut self) {}
-    // fn do_jump_else(&mut self) {}
-    // fn do_jump(&mut self) {}
-    // fn do_return(&mut self) {}
-    // fn do_call(&mut self) {}
-    // fn do_native_call(&mut self) {}
-
-    /// TODO: implement after previous op methods- the `do_call` method must use this! 
-    #[allow(unused_variables)]
-    pub fn dispatch_virtual(&mut self, fun: &Procedure) -> ExecStatus {
-        ExecStatus::GeneralError
+    fn fetch_instruction(&self) -> &bytecode::Instruction {
+        unsafe {
+            self.program.get_procedures().get_unchecked(
+                self.rpid as usize
+            ).get_chunk().get_code().get_unchecked(
+                self.rip as usize
+            )
+        }
     }
 
-    // TODO: implement...
+    fn fetch_constant(&self, const_id: i32) -> &Value {
+        unsafe {
+            self.program.get_procedures().get_unchecked(
+                self.rpid as usize
+            ).get_chunk().get_constant(
+                const_id
+            )
+        }
+    }
+
+    fn fetch_stack_temp(&self, base_offset: i32) -> &Value {
+        let absolute_offset = self.rbp + base_offset;
+
+        unsafe {
+            self.stack.get_unchecked(
+                absolute_offset as usize
+            )
+        }
+    }
+
+    fn fetch_stored_arg(&self, arg_id: i32) -> &Value {
+        let current_frame_ref = &self.frames.back().unwrap().callee_args;
+
+        unsafe {
+            current_frame_ref.get_unchecked(
+                arg_id as usize
+            )
+        }
+    }
+
+    fn fetch_value_by(&self, arg: bytecode::Argument) -> Option<&Value> {
+        let arg_mode = arg.0;
+        let arg_id = arg.1;
+
+        match arg_mode {
+            ArgMode::ConstantId => Some(self.fetch_constant(arg_id)),
+            ArgMode::StackOffset => Some(self.fetch_stack_temp(arg_id)),
+            ArgMode::ArgumentId => Some(self.fetch_stored_arg(arg_id)),
+            _ => None
+        }
+    }
+
+    fn push_in(&mut self, temp: Value){
+        if self.rsp > self.stack_limit as i32 {
+            self.status = ExecStatus::AccessError;
+        }
+
+        self.rsp += 1;
+        *self.stack.get_mut(self.rsp as usize).unwrap() = temp;
+    }
+
+    fn pop_off(&mut self) -> Option<Value> {
+        if self.rsp <= 0 {
+            self.status = ExecStatus::AccessError;
+            return None;
+        }
+
+        let temp_value = self.stack.get_mut(self.rsp as usize).unwrap();
+        self.rsp -= 1;
+
+        Some(*temp_value)
+    }
+
+    fn do_load_const(&mut self, const_id: bytecode::Argument) {
+        let constant_id = const_id.1;
+
+        self.push_in(
+            *self.fetch_constant(constant_id)
+        );
+
+        self.rip += 1;
+    }
+
+    fn do_push(&mut self, source: bytecode::Argument) {
+        let pushing_item = self.fetch_value_by(source);
+
+        if self.rsp > self.stack_limit as i32 {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        if let Some(val) = pushing_item {
+            *self.stack.get_mut((self.rsp + 1) as usize).unwrap() = *val;
+            self.rsp += 1;
+            self.rip += 1;
+        } else {
+            self.status = ExecStatus::AccessError;
+        }
+    }
+
+    fn do_pop(&mut self) {
+        if self.rsp <= 0 {
+            self.status = ExecStatus::ValueError;
+            return;
+        }
+
+        self.rsp -= 1;
+    }
+
+    fn do_replace(&mut self, target: bytecode::Argument, source: bytecode::Argument) {
+        let target_slot = target.1;
+        let incoming_value_opt = self.fetch_value_by(source);
+
+        if incoming_value_opt.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+        
+        unsafe {
+            let incoming_value = incoming_value_opt.unwrap_unchecked();
+
+            *self.stack.get_unchecked_mut(
+                target_slot as usize
+            ) = *incoming_value;
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_neg(&mut self, target: bytecode::Argument) {
+        if target.0 != ArgMode::StackOffset {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let target_slot = self.rbp + target.1;
+
+        unsafe {
+            self.stack.get_unchecked_mut(
+                target_slot as usize
+            ).negate();
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_inc(&mut self, target: bytecode::Argument) {
+        if target.0 != ArgMode::StackOffset {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let target_slot = self.rbp + target.1;
+
+        unsafe {
+            self.stack.get_unchecked_mut(
+                target_slot as usize
+            ).increment();
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_dec(&mut self, target: bytecode::Argument) {
+        if target.0 != ArgMode::StackOffset {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let target_slot = self.rbp + target.1;
+
+        unsafe {
+            self.stack.get_unchecked_mut(
+                target_slot as usize
+            ).decrement();
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_add(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let lhs_value = lhs_temp.unwrap_unchecked().add(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+            self.push_in(lhs_value);
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_sub(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let lhs_value = lhs_temp.unwrap_unchecked().sub(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+            self.push_in(lhs_value);
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_mul(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let lhs_value = lhs_temp.unwrap_unchecked().mul(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+            self.push_in(lhs_value);
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_div(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let lhs_value = lhs_temp.unwrap_unchecked().div(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+
+            if let Value::Empty() = lhs_value {
+                self.status = ExecStatus::BadMath;
+                return;
+            }
+
+            self.push_in(lhs_value);
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_cmp_eq(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let lhs_value = lhs_temp.unwrap_unchecked().is_equal(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+
+            self.push_in(Value::Bool(lhs_value));
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_cmp_ne(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let cmp_value = lhs_temp.unwrap_unchecked().is_unequal(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+
+            self.push_in(Value::Bool(cmp_value));
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_cmp_lt(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let cmp_value = lhs_temp.unwrap_unchecked().is_lesser(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+
+            self.push_in(Value::Bool(cmp_value));
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_cmp_gt(&mut self) {
+        let rhs_temp = self.pop_off();
+        let lhs_temp = self.pop_off();
+
+        if lhs_temp.is_none() || rhs_temp.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        unsafe {
+            let cmp_value = lhs_temp.unwrap_unchecked().is_greater(
+                rhs_temp.as_ref().unwrap_unchecked()
+            );
+
+            self.push_in(Value::Bool(cmp_value));
+        }
+
+        self.rip += 1;
+    }
+
+    fn do_jump_if(&mut self, test: bytecode::Argument, jump_to: bytecode::Argument) {
+        let test_value = self.fetch_value_by(test);
+
+        if test_value.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let (jump_arg_mode, jump_target)= jump_to;
+
+        if jump_arg_mode != ArgMode::CodeOffset {
+            self.status = ExecStatus::BadArgs;
+            return;
+        }
+
+        unsafe {
+            if test_value.unwrap_unchecked().test() {
+                self.rip = jump_target;
+            }
+        }
+    }
+    
+    fn do_jump_else(&mut self, test: bytecode::Argument, jump_to: bytecode::Argument) {
+        let test_value = self.fetch_value_by(test);
+
+        if test_value.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let (jump_arg_mode, jump_target)= jump_to;
+
+        if jump_arg_mode != ArgMode::CodeOffset {
+            self.status = ExecStatus::BadArgs;
+            return;
+        }
+
+        unsafe {
+            if !test_value.unwrap_unchecked().test() {
+                self.rip = jump_target;
+            }
+        }
+    }
+    
+    fn do_jump(&mut self, jump_to: bytecode::Argument) {
+        if jump_to.0 != ArgMode::CodeOffset {
+            self.status = ExecStatus::BadArgs;
+            return;
+        }
+        
+        self.rip = jump_to.1;
+    }
+    
+    fn do_return(&mut self, source: bytecode::Argument) {
+        let returning_frame = self.frames.pop_back().unwrap();
+
+        self.rpid = returning_frame.caller_id;
+        self.rip = returning_frame.caller_pos;
+        self.rsp = self.rbp;
+        let result_value_opt = self.fetch_value_by(source);
+
+        if result_value_opt.is_none() {
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
+        let result_temp = result_value_opt.unwrap();
+
+        *self.stack.get_mut(self.rsp as usize).unwrap() = *result_temp;
+    }
+
+    fn do_call(&mut self, procedure_id: bytecode::Argument, arg_count: bytecode::Argument) {
+        let (proc_arg_mode, proc_id) = procedure_id;
+
+        if proc_arg_mode != ArgMode::ProcedureId {
+            self.status = ExecStatus::BadArgs;
+            return;
+        }
+
+        let (_, mut pending_arg_count) = arg_count;
+
+        let mut temp_callee_args = Vec::<Value>::new();
+
+        while pending_arg_count > 0 {
+            if let Some(temp_arg) = self.pop_off() {   
+                temp_callee_args.push(temp_arg);
+            } else {
+                return;
+            }
+
+            pending_arg_count -= 1;
+        }
+
+        temp_callee_args.reverse();
+
+        let ret_instruction_pos = self.rip + 1;
+
+        self.frames.push_back(
+            CallFrame {
+                callee_args: temp_callee_args,
+                caller_id: self.rpid,
+                caller_pos: ret_instruction_pos,
+            }
+        );
+
+        self.rpid = proc_id;
+        self.rip = 0;
+    }
+    
+    // fn do_native_call(&mut self) {}
+
+    fn is_done(&mut self) -> bool {
+        self.frames.is_empty() || self.status != ExecStatus::Ok
+    }
+
     pub fn run(&mut self) -> ExecStatus {
-        ExecStatus::GeneralError
+        while !self.is_done() {
+            let next_instr = self.fetch_instruction();
+
+            match next_instr {
+                bytecode::Instruction::Nop => {
+                    self.rip += 1;
+                },
+                bytecode::Instruction::LoadConst(source) => {
+                    self.do_load_const(*source);
+                },
+                bytecode::Instruction::Push(source) => {
+                    self.do_push(*source);
+                },
+                bytecode::Instruction::Pop => {
+                    self.do_pop();
+                },
+                bytecode::Instruction::Replace(target, source) => {
+                    self.do_replace(*target, *source);
+                },
+                bytecode::Instruction::Neg(target) => {
+                    self.do_neg(*target);
+                },
+                bytecode::Instruction::Inc(target) => {
+                    self.do_inc(*target);
+                },
+                bytecode::Instruction::Dec(target) => {
+                    self.do_dec(*target);
+                },
+                bytecode::Instruction::Add => {
+                    self.do_add();
+                },
+                bytecode::Instruction::Sub => {
+                    self.do_sub();
+                },
+                bytecode::Instruction::Mul => {
+                    self.do_mul();
+                },
+                bytecode::Instruction::Div => {
+                    self.do_div();
+                },
+                bytecode::Instruction::CompareEq => {
+                    self.do_cmp_eq();
+                },
+                bytecode::Instruction::CompareNe => {
+                    self.do_cmp_ne();
+                },
+                bytecode::Instruction::CompareLt => {
+                    self.do_cmp_lt();
+                },
+                bytecode::Instruction::CompareGt => {
+                    self.do_cmp_gt();
+                },
+                bytecode::Instruction::JumpIf(test, jump_target) => {
+                    self.do_jump_if(*test, *jump_target);
+                },
+                bytecode::Instruction::JumpElse(test, jump_target) => {
+                    self.do_jump_else(*test, *jump_target);
+                },
+                bytecode::Instruction::Jump(jump_target) => {
+                    self.do_jump(*jump_target);
+                },
+                bytecode::Instruction::Return(source) => {
+                    self.do_return(*source);
+                },
+                bytecode::Instruction::Call(proc_id, arg_count) => {
+                    self.do_call(*proc_id, *arg_count);
+                },
+            }
+        }
+
+        self.status
     }
 }

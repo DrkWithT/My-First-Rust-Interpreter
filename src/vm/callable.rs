@@ -4,7 +4,9 @@ pub enum ExecStatus {
     Ok,
     AccessError,
     ValueError,
-    GeneralError,
+    BadMath,
+    IllegalInstruction,
+    BadArgs,
 }
 
 pub trait Callable<Engine> {

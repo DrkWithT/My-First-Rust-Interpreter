@@ -362,12 +362,12 @@ impl StmtVisitor<bool> for IREmitter {
         }
 
         let pre_if_block_id: i32 = self.result.last().unwrap().get_node_count() - 1;
-        let if_block_id = pre_if_block_id + 1;
+        let block_1_id = pre_if_block_id + 1;
         
         self.emit_step(Instruction::Binary(Opcode::JumpElse, condition_value_locator_opt.unwrap(), (Region::BlockId, -1)));
 
-        if !s.get_truthy_body().accept_visitor(self) {
-            eprintln!("Oops: failed to generate if-true block");
+        if !s.get_falsy_body().accept_visitor(self) {
+            eprintln!("Oops: failed to generate else-block");
             return false;
         }
 
@@ -376,12 +376,12 @@ impl StmtVisitor<bool> for IREmitter {
         self.emit_step(Instruction::Nonary(Opcode::GenPatch));
         self.emit_step(Instruction::Unary(Opcode::Jump, (Region::BlockId, -1)));
 
-        self.record_proto_link(pre_if_block_id, if_block_id);
+        self.record_proto_link(pre_if_block_id, block_1_id);
 
-        let falsy_body_ok = s.get_falsy_body().accept_visitor(self);
+        let truthy_body_ok = s.get_truthy_body().accept_visitor(self);
 
-        if !falsy_body_ok && !self.has_error {
-            let if_fallthrough_id = if_block_id + 1;
+        if !truthy_body_ok && !self.has_error {
+            let if_fallthrough_id = block_1_id + 1;
             self.result.last_mut().unwrap().add_node(
                 Node::new(Vec::new(), -1, -1)
             );
@@ -389,12 +389,12 @@ impl StmtVisitor<bool> for IREmitter {
             self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
             self.record_proto_link(pre_if_block_id, if_fallthrough_id);
-            self.record_proto_link(if_block_id, if_fallthrough_id);
+            self.record_proto_link(block_1_id, if_fallthrough_id);
             self.apply_proto_links();
 
             return true;
         } else if self.has_error {
-            eprintln!("Oops: failed to generate else-block");
+            eprintln!("Oops: failed to generate true-block");
 
             return false;
         }
@@ -402,14 +402,14 @@ impl StmtVisitor<bool> for IREmitter {
         self.emit_step(Instruction::Nonary(Opcode::Nop));
         self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
-        let else_block_id = self.result.last().unwrap().get_node_count() - 1;
-        self.record_proto_link(pre_if_block_id, else_block_id);
+        let block_2_id = self.result.last().unwrap().get_node_count() - 1;
+        self.record_proto_link(pre_if_block_id, block_2_id);
 
-        let post_if_block_id = else_block_id + 1;
+        let post_if_block_id = block_2_id + 1;
         self.result.last_mut().unwrap().add_node(Node::new(Vec::new(), -1, -1));
 
-        self.record_proto_link(if_block_id, post_if_block_id);
-        self.record_proto_link(else_block_id, post_if_block_id);
+        self.record_proto_link(block_1_id, post_if_block_id);
+        self.record_proto_link(block_2_id, post_if_block_id);
         self.apply_proto_links();
 
         true

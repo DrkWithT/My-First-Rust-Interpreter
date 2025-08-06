@@ -2,15 +2,43 @@ use crate::vm::callable::*;
 use crate::vm::engine::Engine;
 use crate::vm::value::Value;
 
+#[repr(i32)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum ArgMode {
+    Dud,
+    ConstantId,
+    StackOffset,
+    ArgumentId,
+    CodeOffset,
+    // HeapId,
+    ProcedureId,
+}
+
+impl ArgMode {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            Self::Dud => "unknown",
+            Self::ConstantId => "const-id",
+            Self::StackOffset => "temp-off",
+            Self::ArgumentId => "arg-id",
+            Self::CodeOffset => "code-pos",
+            // Self::HeapId => "heap-id",
+            Self::ProcedureId => "proc-id",
+        }
+    }
+}
+
+pub type Argument = (ArgMode, i32);
+
 pub enum Instruction {
     Nop,
-    LoadConst(i32),
-    Push(i32),
+    LoadConst(Argument),
+    Push(Argument),
     Pop,
-    Replace(i32, i32),
-    Neg(i32),
-    Inc(i32),
-    Dec(i32),
+    Replace(Argument, Argument),
+    Neg(Argument),
+    Inc(Argument),
+    Dec(Argument),
     Add,
     Sub,
     Mul,
@@ -19,11 +47,11 @@ pub enum Instruction {
     CompareNe,
     CompareLt,
     CompareGt,
-    JumpIf(i32, i32),
-    JumpElse(i32, i32),
-    Jump(i32),
-    Return(i32),
-    Call(i32),
+    JumpIf(Argument, Argument),
+    JumpElse(Argument, Argument),
+    Jump(Argument),
+    Return(Argument),
+    Call(Argument),
     // NativeCall(i32),
 }
 

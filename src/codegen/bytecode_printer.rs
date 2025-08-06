@@ -1,5 +1,10 @@
 use crate::vm::callable::Callable;
-use crate::vm::bytecode::{Chunk, Instruction, Program};
+use crate::vm::bytecode::{ArgMode, Chunk, Instruction, Program};
+
+fn disassemble_op_arg(arg: &(ArgMode, i32)) {
+    let (arg_pass_mode, arg_value) = arg;
+    print!("{}:{} ", arg_pass_mode.get_name(), arg_value);
+}
 
 fn disassemble_proc_chunk(chunk: &Chunk) {
     for item in chunk.get_code() {
@@ -8,25 +13,32 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 println!("NOP");
             },
             Instruction::LoadConst(arg_0) => {
-                println!("LOAD_CONST {}", *arg_0);
+                print!("LOAD_CONST ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Push(arg_0) => {
-                println!("PUSH {}", *arg_0);
+                print!("PUSH ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Pop => {
                 println!("POP");
             },
             Instruction::Replace(arg_0, arg_1) => {
-                println!("REPLACE {} {}", *arg_0, *arg_1);
+                print!("REPLACE ");
+                disassemble_op_arg(arg_0);
+                disassemble_op_arg(arg_1);
             },
             Instruction::Neg(arg_0) => {
-                println!("NEG {}", *arg_0);
+                print!("NEG ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Inc(arg_0) => {
-                println!("INC {}", *arg_0);
+                print!("INC ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Dec(arg_0) => {
-                println!("DEC {}", *arg_0);
+                print!("DEC ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Add => {
                 println!("ADD");
@@ -53,19 +65,26 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 println!("CMP_GT");
             },
             Instruction::JumpIf(arg_0, arg_1) => {
-                println!("JMP_IF {} {}", *arg_0, *arg_1);
+                print!("JMP_IF ");
+                disassemble_op_arg(arg_0);
+                disassemble_op_arg(arg_1);
             },
             Instruction::JumpElse(arg_0, arg_1) => {
-                println!("JMP_ELSE {} {}", *arg_0, *arg_1);
+                print!("JMP_ELSE ");
+                disassemble_op_arg(arg_0);
+                disassemble_op_arg(arg_1);
             },
             Instruction::Jump(arg_0) => {
-                println!("JMP {}", *arg_0);
+                print!("JMP ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Return(arg_0) => {
-                println!("RETURN {}", *arg_0);
+                print!("RETURN ");
+                disassemble_op_arg(arg_0);
             },
             Instruction::Call(arg_0) => {
-                println!("CALL {}", *arg_0);
+                print!("CALL ");
+                disassemble_op_arg(arg_0);
             },
         }
     }

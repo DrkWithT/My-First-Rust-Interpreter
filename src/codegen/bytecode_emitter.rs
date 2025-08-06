@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::codegen::ir::*;
 use crate::vm::value::Value;
-use crate::vm::bytecode;
+use crate::vm::bytecode::{self, ArgMode};
 
 struct PatchEntry {
     pub instruction_pos: i32,
@@ -22,7 +22,20 @@ pub struct BytecodeEmitter {
     temp_instructions: Vec<bytecode::Instruction>,
 }
 
+fn convert_ir_arg_tag(arg: Region) -> ArgMode {
+    match arg {
+        Region::Immediate => ArgMode::ConstantId,
+        Region::TempStack => ArgMode::StackOffset,
+        Region::ArgStore => ArgMode::ArgumentId,
+        // Region::ObjectHeap => ArgMode::HeapId,
+        Region::Functions => ArgMode::ProcedureId,
+        // Region::BlockId => ArgMode::Foo,
+        _ => ArgMode::Dud,
+    }
+}
+
 impl BytecodeEmitter {
+
     fn get_last_instruction_pos(&self) -> i32 {
         self.temp_instructions.len() as i32 - 1
     }
@@ -45,13 +58,13 @@ impl BytecodeEmitter {
 
             match target_ref {
                 bytecode::Instruction::Jump(jump_target_loc) => {
-                    *jump_target_loc = next_patch.patching_value;
+                    jump_target_loc.1 = next_patch.patching_value;
                 },
                 bytecode::Instruction::JumpIf(_, jump_target_loc) => {
-                    *jump_target_loc = next_patch.patching_value;
+                    jump_target_loc.1 = next_patch.patching_value;
                 },
                 bytecode::Instruction::JumpElse(_, jump_target_loc) => {
-                    *jump_target_loc = next_patch.patching_value;
+                    jump_target_loc.1 = next_patch.patching_value;
                 },
                 _ => {},
             }
@@ -90,6 +103,7 @@ impl BytecodeEmitter {
             Opcode::CompareGt => {
                 self.temp_instructions.push(bytecode::Instruction::CompareGt);
             },
+            Opcode::BeginBlock => {},
             Opcode::GenPatch => {
                 self.update_backpatch();
             },
@@ -101,35 +115,37 @@ impl BytecodeEmitter {
         true
     }
 
-    fn emit_unary_step_code(&mut self, ir_op: Opcode, arg_0: i32) -> bool {
+    fn emit_unary_step_code(&mut self, ir_op: Opcode, arg_0: Locator) -> bool {
+        let converted_arg_0 = (convert_ir_arg_tag(arg_0.0), arg_0.1);
+
         match ir_op {
             Opcode::LoadConst => {
-                self.temp_instructions.push(bytecode::Instruction::LoadConst(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::LoadConst(converted_arg_0));
             },
             Opcode::Push => {
-                self.temp_instructions.push(bytecode::Instruction::Push(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Push(converted_arg_0));
             },
             Opcode::Neg => {
-                self.temp_instructions.push(bytecode::Instruction::Neg(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Neg(converted_arg_0));
             },
             Opcode::Inc => {
-                self.temp_instructions.push(bytecode::Instruction::Inc(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Inc(converted_arg_0));
             },
             Opcode::Dec => {
-                self.temp_instructions.push(bytecode::Instruction::Dec(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Dec(converted_arg_0));
             },
             Opcode::Jump => {
-                self.temp_instructions.push(bytecode::Instruction::Jump(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Jump(converted_arg_0));
                 self.start_backpatch(PatchEntry {
                     instruction_pos: self.get_last_instruction_pos(),
                     patching_value: -1,
                 });
             },
             Opcode::Return => {
-                self.temp_instructions.push(bytecode::Instruction::Return(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Return(converted_arg_0));
             },
             Opcode::Call => {
-                self.temp_instructions.push(bytecode::Instruction::Call(arg_0));
+                self.temp_instructions.push(bytecode::Instruction::Call(converted_arg_0));
             },
             _ => {
                 return false;
@@ -139,20 +155,23 @@ impl BytecodeEmitter {
         true
     }
 
-    fn emit_binary_step_code(&mut self, ir_op: Opcode, arg_0: i32, arg_1: i32) -> bool {
+    fn emit_binary_step_code(&mut self, ir_op: Opcode, arg_0: Locator, arg_1: Locator) -> bool {
+        let converted_arg_0 = (convert_ir_arg_tag(arg_0.0), arg_0.1);
+        let converted_arg_1 = (convert_ir_arg_tag(arg_1.0), arg_1.1);
+
         match ir_op {
             Opcode::Replace => {
-                self.temp_instructions.push(bytecode::Instruction::Replace(arg_0, arg_1));
+                self.temp_instructions.push(bytecode::Instruction::Replace(converted_arg_0, converted_arg_1));
             },
             Opcode::JumpIf => {
-                self.temp_instructions.push(bytecode::Instruction::JumpIf(arg_0, arg_1));
+                self.temp_instructions.push(bytecode::Instruction::JumpIf(converted_arg_0, converted_arg_1));
                 self.start_backpatch(PatchEntry {
                     instruction_pos: self.get_last_instruction_pos(),
                     patching_value: -1,
                 });
             },
             Opcode::JumpElse => {
-                self.temp_instructions.push(bytecode::Instruction::JumpElse(arg_0, arg_1));
+                self.temp_instructions.push(bytecode::Instruction::JumpElse(converted_arg_0, converted_arg_1));
                 self.start_backpatch(PatchEntry {
                     instruction_pos: self.get_last_instruction_pos(),
                     patching_value: -1,
@@ -170,8 +189,8 @@ impl BytecodeEmitter {
         for temp_instr in ir_block.get_steps() {
             if !match temp_instr {
                 Instruction::Nonary(op) => self.emit_nonary_step_code(*op),
-                Instruction::Unary(op, arg_0) => self.emit_unary_step_code(*op, arg_0.1),
-                Instruction::Binary(op, arg_0, arg_1) => self.emit_binary_step_code(*op, arg_0.1, arg_1.1),
+                Instruction::Unary(op, arg_0) => self.emit_unary_step_code(*op, arg_0.clone()),
+                Instruction::Binary(op, arg_0, arg_1) => self.emit_binary_step_code(*op, arg_0.clone(), arg_1.clone()),
             } {
                 return (false, -1, -1);
             }
@@ -210,9 +229,9 @@ impl BytecodeEmitter {
             if block_truthy_id != -1 {
                 self.pending_node_ids.push_back(block_truthy_id);
             }
-
-            self.apply_patches();
         }
+
+        self.apply_patches();
 
         let mut temp_chunk_constants = Vec::<Value>::new();
         let mut temp_chunk_instructions = Vec::<bytecode::Instruction>::new();

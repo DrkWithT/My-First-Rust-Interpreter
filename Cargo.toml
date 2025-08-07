@@ -6,4 +6,8 @@ edition = "2024"
 [profile.release]
 opt-level = 3
 
+[profile.profiling]
+inherits = "release"
+debug = true
+
 [dependencies]

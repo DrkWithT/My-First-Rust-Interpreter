@@ -49,13 +49,14 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ```
 
 ### Roadmap
- - **Finish naive bytecode generation:**
-   - _Fix branch jump generation._
- - Finish VM
+ - Support while loops (**PLANNED**)
+ - Add native functions (**PLANNED**)
  - Add simple checks for types and declarations
+ - Add optimization passes on IR:
+    - 
  - Support arrays
  - Support strings
- - Support first-class lambdas
+ - Support lambdas
 
 ### Other Docs
  - [Runtime Info](./docs/Runtime.md)

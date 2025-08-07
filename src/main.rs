@@ -136,7 +136,7 @@ fn main() -> ExitCode {
     let engine_status = engine.run();
     let running_time = Instant::now() - pre_run_time;
 
-    println!("\x1b[1;33mFinished in {}ms\x1b[0m", running_time.as_millis());
+    println!("\x1b[1;33mFinished in {} microseconds\x1b[0m", running_time.as_micros());
 
     match engine_status {
         ExecStatus::Ok => {

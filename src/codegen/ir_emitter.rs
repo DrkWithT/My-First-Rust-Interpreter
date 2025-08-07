@@ -28,6 +28,7 @@ pub struct IREmitter {
     relative_stack_offset: i32,
 
     main_id: i32,
+    skip_emit: bool,
     has_error: bool,
 }
 
@@ -42,6 +43,7 @@ impl IREmitter {
             source_copy: String::from(old_src),
             relative_stack_offset: 0,
             main_id: -1,
+            skip_emit: false,
             has_error: false,
         }
     }
@@ -164,8 +166,10 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
                 let temp_flag = literal_lexeme == "true";
                 let temp_flag_locator = self.record_proto_constant(Value::Bool(temp_flag));
 
-                self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_flag_locator.clone()));
-                self.update_relative_offset(1);
+                if !self.skip_emit {
+                    self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_flag_locator.clone()));
+                    self.update_relative_offset(1);
+                }
 
                 Some(temp_flag_locator)
             },
@@ -173,8 +177,10 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
                 let temp_int: i32 = literal_lexeme.parse::<>().unwrap();
                 let temp_int_locator = self.record_proto_constant(Value::Int(temp_int));
 
-                self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_int_locator.clone()));
-                self.update_relative_offset(1);
+                if !self.skip_emit {
+                    self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_int_locator.clone()));
+                    self.update_relative_offset(1);
+                }
 
                 Some(temp_int_locator)
             },
@@ -182,8 +188,10 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
                 let temp_float: f32 = literal_lexeme.parse::<>().unwrap();
                 let temp_float_locator = self.record_proto_constant(Value::Float(temp_float));
 
-                self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_float_locator.clone()));
-                self.update_relative_offset(1);
+                if !self.skip_emit {
+                    self.emit_step(Instruction::Unary(Opcode::LoadConst, temp_float_locator.clone()));
+                    self.update_relative_offset(1);
+                }
 
                 Some(temp_float_locator)
             },
@@ -194,8 +202,16 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
 
                 let named_locator = named_locator_opt.unwrap().clone();
 
-                self.emit_step(Instruction::Unary(Opcode::Push, named_locator.clone()));
-                self.update_relative_offset(1);
+                // NOTE: avoid emitting function values for now, see `visit_call()`!
+                if !self.skip_emit {
+                    match named_locator.0 {
+                        Region::Immediate | Region::TempStack | Region::ArgStore => {
+                            self.emit_step(Instruction::Unary(Opcode::Push, named_locator.clone()));
+                            self.update_relative_offset(1);
+                        },
+                        _ => {},
+                    }
+                }
 
                 Some(named_locator)
             },
@@ -203,6 +219,7 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
         }
     }
 
+    /// NOTE: Here, the visitation of the callee part of the call-expr results in an extra function PUSH- Removal of the PUSH is needed for correctness, as the engine doesn't support 1st-class functions yet... See `visit_primitive()` where the function name is checked!
     fn visit_call(&mut self, e: &Call) -> Option<Locator> {
         let callee_locator_opt = e.get_callee().accept_visitor(self);
 
@@ -253,6 +270,11 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
     }
 
     fn visit_binary(&mut self, e: &Binary) -> Option<Locator> {
+        let expr_opcode = ast_op_to_ir_op(e.get_operator());
+        let found_assign = expr_opcode == Opcode::Replace;
+        let opcode_arity = expr_opcode.arity();
+
+        self.skip_emit = found_assign;
         let result_locator = (Region::TempStack, self.get_stacked_offset());
 
         let lhs_locator_opt = e.get_lhs().accept_visitor(self);
@@ -262,11 +284,8 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
         let rhs_locator_opt = e.get_rhs().accept_visitor(self);
         rhs_locator_opt.as_ref()?;
         let rhs_locator = rhs_locator_opt.unwrap();
-
-        let expr_opcode = ast_op_to_ir_op(e.get_operator());
-        let found_assign = expr_opcode == Opcode::Replace;
-        let opcode_arity = expr_opcode.arity();
-
+        self.skip_emit = false;
+        
         match opcode_arity {
             0 => {
                 self.emit_step(Instruction::Nonary(expr_opcode));
@@ -366,27 +385,29 @@ impl StmtVisitor<bool> for IREmitter {
         
         self.emit_step(Instruction::Binary(Opcode::JumpElse, condition_value_locator_opt.unwrap(), (Region::BlockId, -1)));
 
-        if !s.get_falsy_body().accept_visitor(self) {
-            eprintln!("Oops: failed to generate else-block");
+        let truthy_body_ok = s.get_truthy_body().accept_visitor(self);
+
+        if !truthy_body_ok {
+            eprintln!("Oops: failed to generate if-block");
             return false;
         }
 
         // NOTE: Here, I must patch the jump_else from before the if-block to go to a NOP before a possible JUMP skipping the else-block if available. This is done for correctness.
+        self.emit_step(Instruction::Unary(Opcode::Jump, (Region::BlockId, -1)));
         self.emit_step(Instruction::Nonary(Opcode::Nop));
         self.emit_step(Instruction::Nonary(Opcode::GenPatch));
-        self.emit_step(Instruction::Unary(Opcode::Jump, (Region::BlockId, -1)));
 
         self.record_proto_link(pre_if_block_id, block_1_id);
 
-        let truthy_body_ok = s.get_truthy_body().accept_visitor(self);
+        let falsy_body_ok = s.get_falsy_body().accept_visitor(self);
 
-        if !truthy_body_ok && !self.has_error {
+        if !falsy_body_ok && !self.has_error {
             let if_fallthrough_id = block_1_id + 1;
             self.result.last_mut().unwrap().add_node(
                 Node::new(Vec::new(), -1, -1)
             );
             self.emit_step(Instruction::Nonary(Opcode::Nop));
-            self.emit_step(Instruction::Nonary(Opcode::GenPatch));
+            // self.emit_step(Instruction::Nonary(Opcode::GenPatch));
 
             self.record_proto_link(pre_if_block_id, if_fallthrough_id);
             self.record_proto_link(block_1_id, if_fallthrough_id);
@@ -433,12 +454,13 @@ impl StmtVisitor<bool> for IREmitter {
     fn visit_expr_stmt(&mut self, s: &ExprStmt) -> bool {
         let temp_result_locator_opt = s.get_inner().accept_visitor(self);
 
-        if temp_result_locator_opt.is_none() {
-            return false;
+        if let Some(inner_result) = temp_result_locator_opt {
+            // NOTE: If the inner-expr is an assignment, the result is always a reserved local variable slot. Therefore, I cannot POP since that would break stack correctness.
+            if inner_result.0 != Region::TempStack {
+                self.emit_step(Instruction::Nonary(Opcode::Pop));
+                self.update_relative_offset(-1);
+            }
         }
-
-        self.emit_step(Instruction::Nonary(Opcode::Pop));
-        self.update_relative_offset(-1);
 
         true
     }

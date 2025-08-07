@@ -3,6 +3,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::collections::HashMap;
 use std::fs;
+use std::time::Instant;
 
 pub mod frontend;
 pub mod semantics;
@@ -12,9 +13,9 @@ pub mod vm;
 use crate::frontend::token::*;
 use crate::frontend::parser::*;
 use crate::codegen::ir_emitter::IREmitter;
-use crate::codegen::ir_printer::print_cfg;
+// use crate::codegen::ir_printer::print_cfg;
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
-use crate::codegen::bytecode_printer::disassemble_program;
+// use crate::codegen::bytecode_printer::disassemble_program;
 use crate::vm::callable::ExecStatus;
 use crate::vm::engine::Engine;
 
@@ -22,6 +23,7 @@ const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
 const CONCH_VERSION_MINOR: i32 = 1;
 const CONCH_VERSION_PATCH: i32 = 0;
+const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
 
 fn main() -> ExitCode {
     let mut arg_list= env::args();
@@ -111,9 +113,9 @@ fn main() -> ExitCode {
     let (cfg_list, mut constant_groups_list, main_id) = ir_opt.unwrap();
 
     // TODO: add printing for Value constant region.
-    for graph in &cfg_list {
-        print_cfg(graph);
-    }
+    // for graph in &cfg_list {
+    //     print_cfg(graph);
+    // }
 
     let mut bc_emitter = BytecodeEmitter::default();
 
@@ -126,35 +128,39 @@ fn main() -> ExitCode {
 
     let program = program_opt.unwrap();
 
-    disassemble_program(&program);
+    // disassemble_program(&program);
 
-    let mut engine = Engine::new(program, 8192);
+    let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
     
+    let pre_run_time = Instant::now();
     let engine_status = engine.run();
+    let running_time = Instant::now() - pre_run_time;
+
+    println!("\x1b[1;33mFinished in {}ms\x1b[0m", running_time.as_millis());
 
     match engine_status {
         ExecStatus::Ok => {
-            println!("OK");
+            println!("\x1b[1;32mOK\x1b[0m");
             ExitCode::SUCCESS
         },
         ExecStatus::AccessError => {
-            eprintln!("RunError: AccessError of stack operation.");
+            eprintln!("\x1b[1;31mRunError: AccessError of stack operation.\x1b[0m");
             ExitCode::FAILURE
         },
         ExecStatus::ValueError => {
-            eprintln!("RunError: Invalid Value materialized.");
+            eprintln!("\x1b[1;31mRunError: Invalid Value materialized.\x1b[0m");
             ExitCode::FAILURE
         },
         ExecStatus::BadMath => {
-            eprintln!("RunError: Division by zero.");
+            eprintln!("\x1b[1;31mRunError: Division by zero.\x1b[0m");
             ExitCode::FAILURE
         },
         ExecStatus::IllegalInstruction => {
-            eprintln!("RunError: Illegal instruction fetched.");
+            eprintln!("\x1b[1;31mRunError: Illegal instruction fetched.\x1b[0m");
             ExitCode::FAILURE
         },
         ExecStatus::BadArgs => {
-            eprintln!("RunError: Invalid argument passed to opcode.");
+            eprintln!("\x1b[1;31mRunError: Invalid argument passed to opcode.\x1b[0m");
             ExitCode::FAILURE
         },
     }

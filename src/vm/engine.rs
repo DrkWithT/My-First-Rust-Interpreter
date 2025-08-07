@@ -13,6 +13,8 @@ struct CallFrame {
 
     /// NOTE: Tracks caller procedure ret-address.
     pub caller_pos: i32,
+
+    pub old_rbp: i32,
 }
 
 pub struct Engine {
@@ -32,14 +34,14 @@ pub struct Engine {
     /// INFO: Denotes the top of the stack.
     rsp: i32,
 
-    stack_limit: i16,
+    stack_limit: i32,
 
     /// INFO: Indicates execution status, including when to abort the program early.
     status: ExecStatus,
 }
 
 impl Engine {
-    pub fn new(program_arg: Program, stack_size: i16) -> Self {
+    pub fn new(program_arg: Program, stack_size: i32) -> Self {
         let program_main_id_opt = program_arg.get_entry_procedure_id();
 
         let mut initial_frames = VecDeque::<CallFrame>::new();
@@ -50,15 +52,20 @@ impl Engine {
 
             initial_frames.push_back(CallFrame {
                 callee_args: Vec::new(),
-                caller_id: -1,
-                caller_pos: -1,
+                caller_id: 0,
+                caller_pos: 0,
+                old_rbp: 0,
             });
         }
+
+        let initial_stack_size = stack_size as usize;
+        let mut initial_stack_mem = Vec::<Value>::with_capacity(initial_stack_size);
+        initial_stack_mem.resize(initial_stack_size, Value::Empty());
 
         Self {
             program: program_arg,
             frames: initial_frames,
-            stack: Vec::with_capacity(stack_size as usize),
+            stack: initial_stack_mem,
             rpid: saved_main_id,
             rip: 0,
             rbp: 0,
@@ -121,7 +128,7 @@ impl Engine {
     }
 
     fn push_in(&mut self, temp: Value){
-        if self.rsp > self.stack_limit as i32 {
+        if self.rsp > self.stack_limit {
             self.status = ExecStatus::AccessError;
         }
 
@@ -130,7 +137,7 @@ impl Engine {
     }
 
     fn pop_off(&mut self) -> Option<Value> {
-        if self.rsp <= 0 {
+        if self.rsp < 0 {
             self.status = ExecStatus::AccessError;
             return None;
         }
@@ -154,7 +161,7 @@ impl Engine {
     fn do_push(&mut self, source: bytecode::Argument) {
         let pushing_item = self.fetch_value_by(source);
 
-        if self.rsp > self.stack_limit as i32 {
+        if self.rsp > self.stack_limit {
             self.status = ExecStatus::AccessError;
             return;
         }
@@ -175,6 +182,7 @@ impl Engine {
         }
 
         self.rsp -= 1;
+        self.rip += 1;
     }
 
     fn do_replace(&mut self, target: bytecode::Argument, source: bytecode::Argument) {
@@ -428,8 +436,12 @@ impl Engine {
         unsafe {
             if test_value.unwrap_unchecked().test() {
                 self.rip = jump_target;
+            } else {
+                self.rip += 1;
             }
         }
+
+        self.rsp -= 1;
     }
     
     fn do_jump_else(&mut self, test: bytecode::Argument, jump_to: bytecode::Argument) {
@@ -450,8 +462,12 @@ impl Engine {
         unsafe {
             if !test_value.unwrap_unchecked().test() {
                 self.rip = jump_target;
+            } else {
+                self.rip += 1;
             }
         }
+
+        self.rsp -= 1; // Pop temporary boolean value that was checked...
     }
     
     fn do_jump(&mut self, jump_to: bytecode::Argument) {
@@ -464,21 +480,23 @@ impl Engine {
     }
     
     fn do_return(&mut self, source: bytecode::Argument) {
-        let returning_frame = self.frames.pop_back().unwrap();
-
-        self.rpid = returning_frame.caller_id;
-        self.rip = returning_frame.caller_pos;
-        self.rsp = self.rbp;
         let result_value_opt = self.fetch_value_by(source);
-
+        
         if result_value_opt.is_none() {
             self.status = ExecStatus::AccessError;
             return;
         }
 
         let result_temp = result_value_opt.unwrap();
+        *self.stack.get_mut(self.rbp as usize).unwrap() = *result_temp;
 
-        *self.stack.get_mut(self.rsp as usize).unwrap() = *result_temp;
+        let returning_frame = self.frames.back().unwrap();
+        self.rpid = returning_frame.caller_id;
+        self.rip = returning_frame.caller_pos;
+        self.rsp = self.rbp;
+
+        self.rbp = returning_frame.old_rbp;
+        self.frames.pop_back();
     }
 
     fn do_call(&mut self, procedure_id: bytecode::Argument, arg_count: bytecode::Argument) {
@@ -497,6 +515,8 @@ impl Engine {
             if let Some(temp_arg) = self.pop_off() {   
                 temp_callee_args.push(temp_arg);
             } else {
+                eprintln!("RunError: Could not pop off args into callee ArgStore:\n\trbp = {}, rsp = {}", self.rbp, self.rsp);
+                self.status = ExecStatus::AccessError;
                 return;
             }
 
@@ -512,11 +532,13 @@ impl Engine {
                 callee_args: temp_callee_args,
                 caller_id: self.rpid,
                 caller_pos: ret_instruction_pos,
+                old_rbp: self.rbp,
             }
         );
 
         self.rpid = proc_id;
         self.rip = 0;
+        self.rbp = self.rsp + 1;
     }
     
     // fn do_native_call(&mut self) {}

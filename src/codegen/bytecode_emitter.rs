@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use crate::codegen::ir::*;
 use crate::vm::value::Value;
@@ -48,12 +48,19 @@ impl BytecodeEmitter {
     fn update_backpatch(&mut self) {
         let next_jump_location = self.get_last_instruction_pos();
 
-        self.pending_patches.back_mut().unwrap().patching_value = next_jump_location;
+        self.pending_patches.front_mut().unwrap().patching_value = next_jump_location;
     }
 
-    fn apply_patches(&mut self) {
-        while !self.pending_patches.is_empty() {
-            let next_patch = self.pending_patches.pop_back().unwrap();
+    fn apply_patch(&mut self) {
+        if !self.pending_patches.is_empty() {
+            self.update_backpatch();
+
+            let next_patch = self.pending_patches.pop_front().unwrap();
+
+            if next_patch.patching_value == -1 {
+                self.pending_patches.push_front(next_patch);
+                return;
+            }
 
             let target_ref: &mut bytecode::Instruction = self.temp_instructions.get_mut(next_patch.instruction_pos as usize).unwrap();
 
@@ -106,7 +113,7 @@ impl BytecodeEmitter {
             },
             Opcode::BeginBlock => {},
             Opcode::GenPatch => {
-                self.update_backpatch();
+                self.apply_patch();
             },
             _ => {
                 return false;
@@ -204,36 +211,40 @@ impl BytecodeEmitter {
     }
     
     fn convert_ir_cfg_to_chunk(&mut self, temp_consts: &mut Vec<Value>, temp_cfg: &CFG) -> Option<bytecode::Chunk> {
+        let mut done_ids = HashSet::<i32>::new();
+
         self.pending_node_ids.push_back(
             if temp_cfg.get_root().is_some() { 0 } else { -1 }
         );
 
         while !self.pending_node_ids.is_empty() {
-            let next_node_id = self.pending_node_ids.pop_front().unwrap();
+            let next_node_id = self.pending_node_ids.pop_back().unwrap();
 
-            if next_node_id == -1 {
+            if next_node_id == -1 || done_ids.contains(&next_node_id) {
                 continue;
             }
 
             let (block_gen_ok, block_truthy_id, block_falsy_id) = self.emit_ir_block_code(
                 temp_cfg.get_node_ref(next_node_id).unwrap()
             );
+            done_ids.insert(next_node_id);
 
             if !block_gen_ok {
                 return None;
             }
 
-            if block_falsy_id != -1 {
+            if block_truthy_id != -1 && block_falsy_id == -1 {
+                // A single-truthy-child block always implies a post-if block... Prioritize the child's generation to occur after the if/else blocks are done.
+                self.pending_node_ids.push_front(block_truthy_id);
+            } else {
+                // Normal case: prioritize if/else branches to generate after the pre-branch block. The previous code handles the follow-up case.
                 self.pending_node_ids.push_back(block_falsy_id);
-            }
-
-            if block_truthy_id != -1 {
                 self.pending_node_ids.push_back(block_truthy_id);
             }
         }
 
-        self.apply_patches();
-
+        self.apply_patch();
+        
         let mut temp_chunk_constants = Vec::<Value>::new();
         let mut temp_chunk_instructions = Vec::<bytecode::Instruction>::new();
 

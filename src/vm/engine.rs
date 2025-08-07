@@ -507,23 +507,25 @@ impl Engine {
             return;
         }
 
-        let (_, mut pending_arg_count) = arg_count;
+        let (_, pending_arg_count) = arg_count;
 
-        let mut temp_callee_args = Vec::<Value>::new();
+        let mut temp_callee_args = Vec::<Value>::with_capacity(pending_arg_count as usize);
+        temp_callee_args.resize(pending_arg_count as usize, Value::Empty());
 
-        while pending_arg_count > 0 {
-            if let Some(temp_arg) = self.pop_off() {   
-                temp_callee_args.push(temp_arg);
+        for arg_it in 0..pending_arg_count {
+            if let Some(temp_arg) = self.pop_off() { 
+                unsafe {
+                    let arg_insert_it = pending_arg_count - (1 + arg_it);
+                    *temp_callee_args.get_unchecked_mut(arg_insert_it as usize) = temp_arg;
+                }
             } else {
                 eprintln!("RunError: Could not pop off args into callee ArgStore:\n\trbp = {}, rsp = {}", self.rbp, self.rsp);
                 self.status = ExecStatus::AccessError;
                 return;
             }
-
-            pending_arg_count -= 1;
         }
 
-        temp_callee_args.reverse();
+        // temp_callee_args.reverse();
 
         let ret_instruction_pos = self.rip + 1;
 

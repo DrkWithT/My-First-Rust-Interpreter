@@ -52,8 +52,9 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - Support while loops (**PLANNED**)
  - Add native functions (**PLANNED**)
  - Add simple checks for types and declarations
- - Add optimization passes on IR:
-    - 
+ - Add optimization passes on IR
+    - Instruction substitutions
+    - Dead code elimination
  - Support arrays
  - Support strings
  - Support lambdas

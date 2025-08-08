@@ -36,7 +36,7 @@ impl From<Value> for i32 {
     fn from(val: Value) -> Self {
         match val {
             Value::Int(value) => value,
-            _ => 0
+            _ => 0,
         }
     }
 }
@@ -77,11 +77,11 @@ impl Value {
         match self {
             Self::Int(value) => {
                 *value = -*value;
-            },
+            }
             Self::Float(value) => {
                 *value = -*value;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -89,11 +89,11 @@ impl Value {
         match self {
             Self::Int(value) => {
                 *value += 1;
-            },
+            }
             Self::Float(value) => {
                 *value += 1.0f32;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -101,11 +101,11 @@ impl Value {
         match self {
             Self::Int(value) => {
                 *value -= 1;
-            },
+            }
             Self::Float(value) => {
                 *value -= 1.0f32;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -144,8 +144,12 @@ impl Value {
         }
 
         match self {
-            Self::Int(value) => *value > (*rhs).into(),
-            Self::Float(value) => *value > (*rhs).into(),
+            Self::Int(value) => {
+                *value > (*rhs).into()
+            }
+            Self::Float(value) => {
+                *value > (*rhs).into()
+            }
             _ => false,
         }
     }
@@ -161,14 +165,14 @@ impl Value {
                 let rhs_int: i32 = (*rhs).into();
 
                 Value::Int(lhs_int + rhs_int)
-            },
+            }
             Self::Float(value) => {
                 let lhs_float = *value;
                 let rhs_float: f32 = (*rhs).into();
 
                 Value::Float(lhs_float + rhs_float)
-            },
-            _ => Value::Empty()
+            }
+            _ => Value::Empty(),
         }
     }
 
@@ -183,14 +187,14 @@ impl Value {
                 let rhs_int: i32 = (*rhs).into();
 
                 Value::Int(lhs_int - rhs_int)
-            },
+            }
             Self::Float(value) => {
                 let lhs_float = *value;
                 let rhs_float: f32 = (*rhs).into();
 
                 Value::Float(lhs_float - rhs_float)
-            },
-            _ => Value::Empty()
+            }
+            _ => Value::Empty(),
         }
     }
 
@@ -205,14 +209,14 @@ impl Value {
                 let rhs_int: i32 = (*rhs).into();
 
                 Value::Int(lhs_int * rhs_int)
-            },
+            }
             Self::Float(value) => {
                 let lhs_float = *value;
                 let rhs_float: f32 = (*rhs).into();
 
                 Value::Float(lhs_float * rhs_float)
-            },
-            _ => Value::Empty()
+            }
+            _ => Value::Empty(),
         }
     }
 
@@ -232,14 +236,14 @@ impl Value {
                 let rhs_int: i32 = (*rhs).into();
 
                 Value::Int(lhs_int / rhs_int)
-            },
+            }
             Self::Float(value) => {
                 let lhs_float = *value;
                 let rhs_float: f32 = (*rhs).into();
 
                 Value::Float(lhs_float / rhs_float)
-            },
-            _ => Value::Empty()
+            }
+            _ => Value::Empty(),
         }
     }
 }

@@ -1,4 +1,4 @@
-#[repr(i16)]
+#[repr(i8)]
 #[derive(Clone, Copy, PartialEq)]
 pub enum ExecStatus {
     Ok,
@@ -7,6 +7,7 @@ pub enum ExecStatus {
     BadMath,
     IllegalInstruction,
     BadArgs,
+    NotOk,
 }
 
 pub trait Callable<Engine> {

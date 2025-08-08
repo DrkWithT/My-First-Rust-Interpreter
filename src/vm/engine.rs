@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use crate::vm::value::Value;
-use crate::vm::callable::ExecStatus;
 use crate::vm::bytecode::{self, ArgMode, Program};
+use crate::vm::callable::ExecStatus;
+use crate::vm::value::Value;
 
 struct CallFrame {
     /// NOTE: Tracks current callee's arguments.
@@ -35,6 +35,9 @@ pub struct Engine {
     rsp: i32,
 
     stack_limit: i32,
+
+    /// INFO: Denotes whether there is a fresh temporary just before a cell replacement.
+    rhtmp: i8,
 
     /// INFO: Indicates execution status, including when to abort the program early.
     status: ExecStatus,
@@ -70,6 +73,7 @@ impl Engine {
             rip: 0,
             rbp: 0,
             rsp: -1,
+            rhtmp: 0,
             stack_limit: stack_size,
             status: ExecStatus::Ok,
         }
@@ -77,42 +81,35 @@ impl Engine {
 
     fn fetch_instruction(&self) -> &bytecode::Instruction {
         unsafe {
-            self.program.get_procedures().get_unchecked(
-                self.rpid as usize
-            ).get_chunk().get_code().get_unchecked(
-                self.rip as usize
-            )
+            self.program
+                .get_procedures()
+                .get_unchecked(self.rpid as usize)
+                .get_chunk()
+                .get_code()
+                .get_unchecked(self.rip as usize)
         }
     }
 
     fn fetch_constant(&self, const_id: i32) -> &Value {
         unsafe {
-            self.program.get_procedures().get_unchecked(
-                self.rpid as usize
-            ).get_chunk().get_constant(
-                const_id
-            )
+            self.program
+                .get_procedures()
+                .get_unchecked(self.rpid as usize)
+                .get_chunk()
+                .get_constant(const_id)
         }
     }
 
     fn fetch_stack_temp(&self, base_offset: i32) -> &Value {
         let absolute_offset = self.rbp + base_offset;
 
-        unsafe {
-            self.stack.get_unchecked(
-                absolute_offset as usize
-            )
-        }
+        unsafe { self.stack.get_unchecked(absolute_offset as usize) }
     }
 
     fn fetch_stored_arg(&self, arg_id: i32) -> &Value {
         let current_frame_ref = &self.frames.back().unwrap().callee_args;
 
-        unsafe {
-            current_frame_ref.get_unchecked(
-                arg_id as usize
-            )
-        }
+        unsafe { current_frame_ref.get_unchecked(arg_id as usize) }
     }
 
     fn fetch_value_by(&self, arg: bytecode::Argument) -> Option<&Value> {
@@ -123,16 +120,31 @@ impl Engine {
             ArgMode::ConstantId => Some(self.fetch_constant(arg_id)),
             ArgMode::StackOffset => Some(self.fetch_stack_temp(arg_id)),
             ArgMode::ArgumentId => Some(self.fetch_stored_arg(arg_id)),
-            _ => None
+            _ => None,
         }
     }
 
-    fn push_in(&mut self, temp: Value){
+    fn push_in(&mut self, temp: Value) {
         if self.rsp > self.stack_limit {
+            eprintln!(
+                "RunError: invalid stack top- rbp = {}, rsp = {}",
+                self.rbp, self.rsp
+            );
             self.status = ExecStatus::AccessError;
+            return;
         }
 
         self.rsp += 1;
+
+        if self.rsp > 172 {
+            eprintln!(
+                "RunError: rsp too large (limit 172 for testing): {}",
+                self.rsp
+            );
+            self.status = ExecStatus::AccessError;
+            return;
+        }
+
         *self.stack.get_mut(self.rsp as usize).unwrap() = temp;
     }
 
@@ -151,9 +163,7 @@ impl Engine {
     fn do_load_const(&mut self, const_id: bytecode::Argument) {
         let constant_id = const_id.1;
 
-        self.push_in(
-            *self.fetch_constant(constant_id)
-        );
+        self.push_in(*self.fetch_constant(constant_id));
 
         self.rip += 1;
     }
@@ -193,14 +203,19 @@ impl Engine {
             self.status = ExecStatus::AccessError;
             return;
         }
-        
+
         unsafe {
             let incoming_value = incoming_value_opt.unwrap_unchecked();
 
-            *self.stack.get_unchecked_mut(
-                target_slot as usize
-            ) = *incoming_value;
+            *self.stack.get_unchecked_mut(target_slot as usize) = *incoming_value;
         }
+
+        // Discard immediate assigned value by lazy deletion.
+        if self.rhtmp == 1 && source.0 == ArgMode::StackOffset && source.1 == self.rsp {
+            self.rsp -= 1;
+        }
+
+        self.rhtmp = 0;
 
         self.rip += 1;
     }
@@ -214,9 +229,7 @@ impl Engine {
         let target_slot = self.rbp + target.1;
 
         unsafe {
-            self.stack.get_unchecked_mut(
-                target_slot as usize
-            ).negate();
+            self.stack.get_unchecked_mut(target_slot as usize).negate();
         }
 
         self.rip += 1;
@@ -231,9 +244,9 @@ impl Engine {
         let target_slot = self.rbp + target.1;
 
         unsafe {
-            self.stack.get_unchecked_mut(
-                target_slot as usize
-            ).increment();
+            self.stack
+                .get_unchecked_mut(target_slot as usize)
+                .increment();
         }
 
         self.rip += 1;
@@ -248,9 +261,9 @@ impl Engine {
         let target_slot = self.rbp + target.1;
 
         unsafe {
-            self.stack.get_unchecked_mut(
-                target_slot as usize
-            ).decrement();
+            self.stack
+                .get_unchecked_mut(target_slot as usize)
+                .decrement();
         }
 
         self.rip += 1;
@@ -266,9 +279,9 @@ impl Engine {
         }
 
         unsafe {
-            let lhs_value = lhs_temp.unwrap_unchecked().add(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let lhs_value = lhs_temp
+                .unwrap_unchecked()
+                .add(rhs_temp.as_ref().unwrap_unchecked());
             self.push_in(lhs_value);
         }
 
@@ -285,9 +298,9 @@ impl Engine {
         }
 
         unsafe {
-            let lhs_value = lhs_temp.unwrap_unchecked().sub(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let lhs_value = lhs_temp
+                .unwrap_unchecked()
+                .sub(rhs_temp.as_ref().unwrap_unchecked());
             self.push_in(lhs_value);
         }
 
@@ -304,9 +317,9 @@ impl Engine {
         }
 
         unsafe {
-            let lhs_value = lhs_temp.unwrap_unchecked().mul(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let lhs_value = lhs_temp
+                .unwrap_unchecked()
+                .mul(rhs_temp.as_ref().unwrap_unchecked());
             self.push_in(lhs_value);
         }
 
@@ -323,9 +336,9 @@ impl Engine {
         }
 
         unsafe {
-            let lhs_value = lhs_temp.unwrap_unchecked().div(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let lhs_value = lhs_temp
+                .unwrap_unchecked()
+                .div(rhs_temp.as_ref().unwrap_unchecked());
 
             if let Value::Empty() = lhs_value {
                 self.status = ExecStatus::BadMath;
@@ -348,9 +361,9 @@ impl Engine {
         }
 
         unsafe {
-            let lhs_value = lhs_temp.unwrap_unchecked().is_equal(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let lhs_value = lhs_temp
+                .unwrap_unchecked()
+                .is_equal(rhs_temp.as_ref().unwrap_unchecked());
 
             self.push_in(Value::Bool(lhs_value));
         }
@@ -368,9 +381,9 @@ impl Engine {
         }
 
         unsafe {
-            let cmp_value = lhs_temp.unwrap_unchecked().is_unequal(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let cmp_value = lhs_temp
+                .unwrap_unchecked()
+                .is_unequal(rhs_temp.as_ref().unwrap_unchecked());
 
             self.push_in(Value::Bool(cmp_value));
         }
@@ -388,9 +401,9 @@ impl Engine {
         }
 
         unsafe {
-            let cmp_value = lhs_temp.unwrap_unchecked().is_lesser(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let cmp_value = lhs_temp
+                .unwrap_unchecked()
+                .is_lesser(rhs_temp.as_ref().unwrap_unchecked());
 
             self.push_in(Value::Bool(cmp_value));
         }
@@ -408,9 +421,9 @@ impl Engine {
         }
 
         unsafe {
-            let cmp_value = lhs_temp.unwrap_unchecked().is_greater(
-                rhs_temp.as_ref().unwrap_unchecked()
-            );
+            let cmp_value = lhs_temp
+                .unwrap_unchecked()
+                .is_greater(rhs_temp.as_ref().unwrap_unchecked());
 
             self.push_in(Value::Bool(cmp_value));
         }
@@ -426,7 +439,7 @@ impl Engine {
             return;
         }
 
-        let (jump_arg_mode, jump_target)= jump_to;
+        let (jump_arg_mode, jump_target) = jump_to;
 
         if jump_arg_mode != ArgMode::CodeOffset {
             self.status = ExecStatus::BadArgs;
@@ -443,7 +456,7 @@ impl Engine {
 
         self.rsp -= 1;
     }
-    
+
     fn do_jump_else(&mut self, test: bytecode::Argument, jump_to: bytecode::Argument) {
         let test_value = self.fetch_value_by(test);
 
@@ -452,7 +465,7 @@ impl Engine {
             return;
         }
 
-        let (jump_arg_mode, jump_target)= jump_to;
+        let (jump_arg_mode, jump_target) = jump_to;
 
         if jump_arg_mode != ArgMode::CodeOffset {
             self.status = ExecStatus::BadArgs;
@@ -469,19 +482,19 @@ impl Engine {
 
         self.rsp -= 1; // Pop temporary boolean value that was checked...
     }
-    
+
     fn do_jump(&mut self, jump_to: bytecode::Argument) {
         if jump_to.0 != ArgMode::CodeOffset {
             self.status = ExecStatus::BadArgs;
             return;
         }
-        
+
         self.rip = jump_to.1;
     }
-    
+
     fn do_return(&mut self, source: bytecode::Argument) {
         let result_value_opt = self.fetch_value_by(source);
-        
+
         if result_value_opt.is_none() {
             self.status = ExecStatus::AccessError;
             return;
@@ -513,36 +526,35 @@ impl Engine {
         temp_callee_args.resize(pending_arg_count as usize, Value::Empty());
 
         for arg_it in 0..pending_arg_count {
-            if let Some(temp_arg) = self.pop_off() { 
+            if let Some(temp_arg) = self.pop_off() {
                 unsafe {
                     let arg_insert_it = pending_arg_count - (1 + arg_it);
                     *temp_callee_args.get_unchecked_mut(arg_insert_it as usize) = temp_arg;
                 }
             } else {
-                eprintln!("RunError: Could not pop off args into callee ArgStore:\n\trbp = {}, rsp = {}", self.rbp, self.rsp);
+                eprintln!(
+                    "RunError: Could not pop off args into callee ArgStore:\n\trbp = {}, rsp = {}",
+                    self.rbp, self.rsp
+                );
                 self.status = ExecStatus::AccessError;
                 return;
             }
         }
 
-        // temp_callee_args.reverse();
-
         let ret_instruction_pos = self.rip + 1;
 
-        self.frames.push_back(
-            CallFrame {
-                callee_args: temp_callee_args,
-                caller_id: self.rpid,
-                caller_pos: ret_instruction_pos,
-                old_rbp: self.rbp,
-            }
-        );
+        self.frames.push_back(CallFrame {
+            callee_args: temp_callee_args,
+            caller_id: self.rpid,
+            caller_pos: ret_instruction_pos,
+            old_rbp: self.rbp,
+        });
 
         self.rpid = proc_id;
         self.rip = 0;
         self.rbp = self.rsp + 1;
     }
-    
+
     // fn do_native_call(&mut self) {}
 
     fn is_done(&mut self) -> bool {
@@ -556,68 +568,83 @@ impl Engine {
             match next_instr {
                 bytecode::Instruction::Nop => {
                     self.rip += 1;
-                },
+                }
                 bytecode::Instruction::LoadConst(source) => {
                     self.do_load_const(*source);
-                },
+                }
                 bytecode::Instruction::Push(source) => {
                     self.do_push(*source);
-                },
+                }
                 bytecode::Instruction::Pop => {
                     self.do_pop();
-                },
+                }
                 bytecode::Instruction::Replace(target, source) => {
                     self.do_replace(*target, *source);
-                },
+                }
                 bytecode::Instruction::Neg(target) => {
                     self.do_neg(*target);
-                },
+                }
                 bytecode::Instruction::Inc(target) => {
                     self.do_inc(*target);
-                },
+                }
                 bytecode::Instruction::Dec(target) => {
                     self.do_dec(*target);
-                },
+                }
                 bytecode::Instruction::Add => {
                     self.do_add();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::Sub => {
                     self.do_sub();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::Mul => {
                     self.do_mul();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::Div => {
                     self.do_div();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::CompareEq => {
                     self.do_cmp_eq();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::CompareNe => {
                     self.do_cmp_ne();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::CompareLt => {
                     self.do_cmp_lt();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::CompareGt => {
                     self.do_cmp_gt();
-                },
+                    self.rhtmp = 1;
+                }
                 bytecode::Instruction::JumpIf(test, jump_target) => {
                     self.do_jump_if(*test, *jump_target);
-                },
+                }
                 bytecode::Instruction::JumpElse(test, jump_target) => {
                     self.do_jump_else(*test, *jump_target);
-                },
+                }
                 bytecode::Instruction::Jump(jump_target) => {
                     self.do_jump(*jump_target);
-                },
+                }
                 bytecode::Instruction::Return(source) => {
                     self.do_return(*source);
-                },
+                }
                 bytecode::Instruction::Call(proc_id, arg_count) => {
                     self.do_call(*proc_id, *arg_count);
-                },
+                }
             }
+        }
+
+        let main_result_code = self.stack.first().unwrap();
+        let zero_ok = Value::Int(0);
+
+        if self.status == ExecStatus::Ok && !main_result_code.is_equal(&zero_ok) {
+            self.status = ExecStatus::NotOk;
         }
 
         self.status

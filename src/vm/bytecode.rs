@@ -55,6 +55,17 @@ pub enum Instruction {
     // NativeCall(i32),
 }
 
+impl Instruction {
+    pub fn is_valid_jump(&self) -> bool {
+        match self {
+            Self::JumpIf(_, target) => target.1 != -1,
+            Self::JumpElse(_, target) => target.1 != -1,
+            Self::Jump(target) => target.1 != -1,
+            _ => false,
+        }
+    }
+}
+
 pub struct Chunk {
     constants: Vec<Value>,
     code: Vec<Instruction>,

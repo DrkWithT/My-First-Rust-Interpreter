@@ -1,8 +1,8 @@
-use crate::token_from;
-use crate::frontend::token::{Token, TokenType};
-use crate::frontend::lexer::Lexer;
 use crate::frontend::ast::*;
+use crate::frontend::lexer::Lexer;
+use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types::*;
+use crate::token_from;
 
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
 pub type ParseResult = Option<ASTDecls>;
@@ -12,12 +12,18 @@ pub struct Parser {
     previous: Token,
     current: Token,
     error_count: i32,
-    parse_error_max: i32
+    parse_error_max: i32,
 }
 
 impl Parser {
     pub fn new(tokenizer: Lexer) -> Self {
-        Self { tokenizer, previous: token_from!(TokenType::Unknown, 0, 1, 1, 1), current: token_from!(TokenType::Unknown, 0, 1, 1, 1), error_count: 0, parse_error_max: 5 }
+        Self {
+            tokenizer,
+            previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
+            current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
+            error_count: 0,
+            parse_error_max: 5,
+        }
     }
 
     fn previous(&self) -> &Token {
@@ -41,7 +47,7 @@ impl Parser {
             match temp_tag {
                 TokenType::Spaces | TokenType::Comment => {
                     continue;
-                },
+                }
                 _ => {
                     return temp;
                 }
@@ -66,15 +72,12 @@ impl Parser {
             return;
         }
 
-        let culprit_lexeme = culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
+        let culprit_lexeme =
+            culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
 
         println!(
             "Syntax error no. {}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
-            self.error_count,
-            culprit_lexeme,
-            culprit_line,
-            culprit_col,
-            msg
+            self.error_count, culprit_lexeme, culprit_line, culprit_col, msg
         );
 
         self.error_count += 1;
@@ -106,13 +109,16 @@ impl Parser {
 
     fn parse_type(&mut self) -> Box<dyn TypeKind> {
         self.consume_any();
-        let typename_lexeme = self.previous().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+        let typename_lexeme = self
+            .previous()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .unwrap_or("");
 
         match typename_lexeme {
             "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
             "int" => Box::new(PrimitiveInfo::new(PrimitiveTag::Integer)),
             "float" => Box::new(PrimitiveInfo::new(PrimitiveTag::Floating)),
-            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown))
+            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown)),
         }
     }
 
@@ -124,16 +130,19 @@ impl Parser {
 
             return parenthesized_expr;
         }
-        
+
         let token_copy = *self.current();
 
-        if !self.consume_of([TokenType::LiteralBool, TokenType::LiteralInt, TokenType::LiteralFloat, TokenType::Identifier]) {
+        if !self.consume_of([
+            TokenType::LiteralBool,
+            TokenType::LiteralInt,
+            TokenType::LiteralFloat,
+            TokenType::Identifier,
+        ]) {
             return None;
         }
 
-        Some(Box::new(
-            Primitive::new(token_copy)
-        ))
+        Some(Box::new(Primitive::new(token_copy)))
     }
 
     fn parse_access(&mut self) -> Option<Box<dyn Expr>> {
@@ -179,9 +188,7 @@ impl Parser {
 
         if self.match_here([TokenType::ParenClose]) {
             self.consume_any();
-            return Some(Box::new(
-                Call::new(callee_expr, calling_args)
-            ));
+            return Some(Box::new(Call::new(callee_expr, calling_args)));
         }
 
         let first_arg_opt = self.parse_compare();
@@ -205,21 +212,17 @@ impl Parser {
             calling_args.push(next_arg_opt.unwrap());
         }
 
-        Some(Box::new(
-            Call::new(callee_expr, calling_args)
-        ))
+        Some(Box::new(Call::new(callee_expr, calling_args)))
     }
 
     fn parse_unary(&mut self) -> Option<Box<dyn Expr>> {
-        if !self.match_here([TokenType::OpMinus, TokenType::OpIncrement, TokenType::OpDecrement]) {
+        if !self.match_here([TokenType::OpMinus]) {
             return self.parse_call();
         }
-        
+
         let current_tag = self.current().tag;
         let prefixed_op = match current_tag {
             TokenType::OpMinus => OperatorTag::Negate,
-            TokenType::OpIncrement => OperatorTag::Increment,
-            TokenType::OpDecrement => OperatorTag::Decrement,
             _ => OperatorTag::Noop,
         };
 
@@ -229,9 +232,7 @@ impl Parser {
 
         temp_inner_opt.as_ref()?;
 
-        Some(Box::new(
-            Unary::new(temp_inner_opt.unwrap(), prefixed_op)
-        ))
+        Some(Box::new(Unary::new(temp_inner_opt.unwrap(), prefixed_op)))
     }
 
     fn parse_factor(&mut self) -> Option<Box<dyn Expr>> {
@@ -279,7 +280,7 @@ impl Parser {
             }
 
             let temp_tag = self.current().tag;
-            
+
             let temp_op = if temp_tag == TokenType::OpPlus {
                 OperatorTag::Plus
             } else {
@@ -287,7 +288,7 @@ impl Parser {
             };
 
             self.consume_any();
-            
+
             let rhs_opt = self.parse_factor();
 
             rhs_opt.as_ref()?;
@@ -377,9 +378,11 @@ impl Parser {
 
         rhs_opt.as_ref()?;
 
-        Some(Box::new(
-            Binary::new(lhs_opt.unwrap(), rhs_opt.unwrap(), OperatorTag::Assign)
-        ))
+        Some(Box::new(Binary::new(
+            lhs_opt.unwrap(),
+            rhs_opt.unwrap(),
+            OperatorTag::Assign,
+        )))
     }
 
     fn parse_variable_decl(&mut self) -> Option<Box<dyn Stmt>> {
@@ -402,9 +405,11 @@ impl Parser {
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            VariableDecl::new(var_name, var_type_box, var_init_expr)
-        ))
+        Some(Box::new(VariableDecl::new(
+            var_name,
+            var_type_box,
+            var_init_expr,
+        )))
     }
 
     fn parse_if(&mut self) -> Option<Box<dyn Stmt>> {
@@ -421,22 +426,42 @@ impl Parser {
         truthy_body_opt.as_ref()?;
 
         let truthy_body = truthy_body_opt.unwrap();
-        
-        if self.current().to_lexeme_str(self.tokenizer.view_source()).expect("") == "else" {
+
+        if self
+            .current()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .expect("")
+            == "else"
+        {
             self.consume_any();
 
             let falsy_body_opt = self.parse_block();
 
             falsy_body_opt.as_ref()?;
 
-            return Some(Box::new(
-                If::new(truthy_body, falsy_body_opt.unwrap(), conds_expr)
-            ));
+            return Some(Box::new(If::new(
+                truthy_body,
+                falsy_body_opt.unwrap(),
+                conds_expr,
+            )));
         }
 
         let dud_falsy_body = Box::new(Block::new(Vec::new()));
 
         Some(Box::new(If::new(truthy_body, dud_falsy_body, conds_expr)))
+    }
+
+    fn parse_while(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_any();
+
+        let check_expr = self.parse_compare();
+
+        let body_stmt = self.parse_block();
+
+        Some(Box::new(While::new(
+            check_expr.unwrap(),
+            body_stmt.unwrap(),
+        )))
     }
 
     fn parse_return(&mut self) -> Option<Box<dyn Stmt>> {
@@ -448,9 +473,7 @@ impl Parser {
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            Return::new(result_expr_opt.unwrap())
-        ))
+        Some(Box::new(Return::new(result_expr_opt.unwrap())))
     }
 
     fn parse_expr_stmt(&mut self) -> Option<Box<dyn Stmt>> {
@@ -460,19 +483,21 @@ impl Parser {
 
         self.consume_of([TokenType::Semicolon]);
 
-        Some(Box::new(
-            ExprStmt::new(inner_expr_opt.unwrap())
-        ))
+        Some(Box::new(ExprStmt::new(inner_expr_opt.unwrap())))
     }
 
     fn parse_nestable(&mut self) -> Option<Box<dyn Stmt>> {
-        let keyword = self.current().to_lexeme_str(self.tokenizer.view_source()).expect("");
+        let keyword = self
+            .current()
+            .to_lexeme_str(self.tokenizer.view_source())
+            .expect("");
 
         match keyword {
             "let" => self.parse_variable_decl(),
             "if" => self.parse_if(),
+            "while" => self.parse_while(),
             "return" => self.parse_return(),
-            _ => self.parse_expr_stmt()
+            _ => self.parse_expr_stmt(),
         }
     }
 
@@ -494,9 +519,7 @@ impl Parser {
             items.push(next_stmt_opt.unwrap());
         }
 
-        Some(Box::new(
-            Block::new(items)
-        ))
+        Some(Box::new(Block::new(items)))
     }
 
     fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
@@ -514,9 +537,12 @@ impl Parser {
 
         func_body_opt.as_ref()?;
 
-        Some(Box::new(
-            FunctionDecl::new(func_name_token, func_params, func_type_box, func_body_opt.unwrap())
-        ))
+        Some(Box::new(FunctionDecl::new(
+            func_name_token,
+            func_params,
+            func_type_box,
+            func_body_opt.unwrap(),
+        )))
     }
 
     fn parse_param_decl(&mut self) -> ParamDecl {
@@ -569,6 +595,10 @@ impl Parser {
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
-        if self.error_count == 0 { Some(all_top_stmts) } else { None }
+        if self.error_count == 0 {
+            Some(all_top_stmts)
+        } else {
+            None
+        }
     }
 }

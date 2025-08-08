@@ -1,10 +1,10 @@
+use crate::codegen::ir::Locator;
 use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types;
-use crate::codegen::ir::Locator;
 
 pub struct ParamDecl {
     name_token: Token,
-    typing: Box<dyn types::TypeKind>
+    typing: Box<dyn types::TypeKind>,
 }
 
 impl ParamDecl {
@@ -63,7 +63,7 @@ impl Expr for Primitive {
             TokenType::LiteralBool => types::PrimitiveTag::Boolean,
             TokenType::LiteralInt => types::PrimitiveTag::Integer,
             TokenType::LiteralFloat => types::PrimitiveTag::Floating,
-            _ => types::PrimitiveTag::Unknown
+            _ => types::PrimitiveTag::Unknown,
         };
 
         Box::new(types::PrimitiveInfo::new(deduced_type_tag))
@@ -76,7 +76,7 @@ impl Expr for Primitive {
 
 pub struct Call {
     callee: Box<dyn Expr>,
-    args: Vec<Box<dyn Expr>>
+    args: Vec<Box<dyn Expr>>,
 }
 
 impl Call {
@@ -117,7 +117,7 @@ impl Expr for Call {
 
 pub struct Unary {
     inner: Box<dyn Expr>,
-    op_tag: types::OperatorTag
+    op_tag: types::OperatorTag,
 }
 
 impl Unary {
@@ -149,8 +149,8 @@ impl Expr for Unary {
                 types::OperatorTag::Minus => inner_type_box,
                 types::OperatorTag::Increment => inner_type_box,
                 types::OperatorTag::Decrement => inner_type_box,
-                _ => Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
-            }
+                _ => Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown)),
+            };
         }
 
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
@@ -164,7 +164,7 @@ impl Expr for Unary {
 pub struct Binary {
     pub lhs: Box<dyn Expr>,
     pub rhs: Box<dyn Expr>,
-    pub op_tag: types::OperatorTag
+    pub op_tag: types::OperatorTag,
 }
 
 impl Binary {
@@ -202,6 +202,7 @@ pub trait StmtVisitor<Res> {
     fn visit_block(&mut self, s: &Block) -> Res;
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> Res;
     fn visit_if(&mut self, s: &If) -> Res;
+    fn visit_while(&mut self, s: &While) -> Res;
     fn visit_return(&mut self, s: &Return) -> Res;
     fn visit_expr_stmt(&mut self, s: &ExprStmt) -> Res;
 }
@@ -217,12 +218,22 @@ pub struct FunctionDecl {
     name_token: Token,
     params: Vec<ParamDecl>,
     result_typing: Box<dyn types::TypeKind>,
-    body: Box<dyn Stmt>
+    body: Box<dyn Stmt>,
 }
 
 impl FunctionDecl {
-    pub fn new(name_token: Token, params: Vec<ParamDecl>, result_typing: Box<dyn types::TypeKind>, body: Box<dyn Stmt>) -> Self {
-        Self { name_token, params, result_typing, body }
+    pub fn new(
+        name_token: Token,
+        params: Vec<ParamDecl>,
+        result_typing: Box<dyn types::TypeKind>,
+        body: Box<dyn Stmt>,
+    ) -> Self {
+        Self {
+            name_token,
+            params,
+            result_typing,
+            body,
+        }
     }
 
     pub fn get_name_token(&self) -> &Token {
@@ -261,7 +272,7 @@ impl Stmt for FunctionDecl {
 }
 
 pub struct Block {
-    items: Vec<Box<dyn Stmt>>
+    items: Vec<Box<dyn Stmt>>,
 }
 
 impl Block {
@@ -295,12 +306,20 @@ impl Stmt for Block {
 pub struct VariableDecl {
     name_token: Token,
     typing: Box<dyn types::TypeKind>,
-    init_expr: Box<dyn Expr>
+    init_expr: Box<dyn Expr>,
 }
 
 impl VariableDecl {
-    pub fn new(name_token: Token, typing: Box<dyn types::TypeKind>, init_expr: Box<dyn Expr>) -> Self {
-        Self { name_token, typing, init_expr }
+    pub fn new(
+        name_token: Token,
+        typing: Box<dyn types::TypeKind>,
+        init_expr: Box<dyn Expr>,
+    ) -> Self {
+        Self {
+            name_token,
+            typing,
+            init_expr,
+        }
     }
 
     pub fn get_name_token(&self) -> &Token {
@@ -337,12 +356,16 @@ impl Stmt for VariableDecl {
 pub struct If {
     truthy: Box<dyn Stmt>,
     falsy: Box<dyn Stmt>,
-    check: Box<dyn Expr>
+    check: Box<dyn Expr>,
 }
 
 impl If {
     pub fn new(truthy: Box<dyn Stmt>, falsy: Box<dyn Stmt>, check: Box<dyn Expr>) -> Self {
-        Self { truthy, falsy, check }
+        Self {
+            truthy,
+            falsy,
+            check,
+        }
     }
 
     pub fn get_truthy_body(&self) -> &dyn Stmt {
@@ -376,8 +399,48 @@ impl Stmt for If {
     }
 }
 
+pub struct While {
+    check: Box<dyn Expr>,
+    body: Box<dyn Stmt>,
+}
+
+impl While {
+    pub fn new(check_arg: Box<dyn Expr>, body_arg: Box<dyn Stmt>) -> Self {
+        Self {
+            check: check_arg,
+            body: body_arg,
+        }
+    }
+
+    pub fn get_check(&self) -> &dyn Expr {
+        &*self.check
+    }
+
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
+    }
+}
+
+impl Stmt for While {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        false
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_while(self)
+    }
+}
+
 pub struct Return {
-    result: Box<dyn Expr>
+    result: Box<dyn Expr>,
 }
 
 impl Return {
@@ -409,7 +472,7 @@ impl Stmt for Return {
 }
 
 pub struct ExprStmt {
-    inner: Box<dyn Expr>
+    inner: Box<dyn Expr>,
 }
 
 impl ExprStmt {

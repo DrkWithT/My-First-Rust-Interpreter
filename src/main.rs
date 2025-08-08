@@ -1,21 +1,21 @@
+use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
-use std::collections::HashMap;
-use std::fs;
 use std::time::Instant;
 
+pub mod codegen;
 pub mod frontend;
 pub mod semantics;
-pub mod codegen;
 pub mod vm;
 
-use crate::frontend::token::*;
-use crate::frontend::parser::*;
-use crate::codegen::ir_emitter::IREmitter;
-// use crate::codegen::ir_printer::print_cfg;
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
 // use crate::codegen::bytecode_printer::disassemble_program;
+use crate::codegen::ir_emitter::IREmitter;
+// use crate::codegen::ir_printer::print_cfg;
+use crate::frontend::parser::*;
+use crate::frontend::token::*;
 use crate::vm::callable::ExecStatus;
 use crate::vm::engine::Engine;
 
@@ -26,7 +26,7 @@ const CONCH_VERSION_PATCH: i32 = 0;
 const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
 
 fn main() -> ExitCode {
-    let mut arg_list= env::args();
+    let mut arg_list = env::args();
     let arg_count: usize = arg_list.len() - 1;
 
     if arg_count > MAX_ARG_COUNT {
@@ -37,7 +37,9 @@ fn main() -> ExitCode {
     let first_arg_str = arg_list.nth(1).unwrap_or(String::from(""));
 
     if first_arg_str == "--version" {
-        println!("conchvm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)");
+        println!(
+            "conchvm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
+        );
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
@@ -69,16 +71,15 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from("let"), TokenType::Keyword);
     lexical_items.insert(String::from("if"), TokenType::Keyword);
     lexical_items.insert(String::from("else"), TokenType::Keyword);
+    lexical_items.insert(String::from("while"), TokenType::Keyword);
     lexical_items.insert(String::from("return"), TokenType::Keyword);
     lexical_items.insert(String::from("exit"), TokenType::Keyword);
-    lexical_items.insert(String::from("bool"),TokenType::Typename);
+    lexical_items.insert(String::from("bool"), TokenType::Typename);
     lexical_items.insert(String::from("int"), TokenType::Typename);
     lexical_items.insert(String::from("float"), TokenType::Typename);
     lexical_items.insert(String::from("true"), TokenType::LiteralBool);
     lexical_items.insert(String::from("false"), TokenType::LiteralBool);
     lexical_items.insert(String::from("."), TokenType::OpAccess);
-    lexical_items.insert(String::from("++"), TokenType::OpIncrement);
-    lexical_items.insert(String::from("--"), TokenType::OpDecrement);
     lexical_items.insert(String::from("*"), TokenType::OpTimes);
     lexical_items.insert(String::from("/"), TokenType::OpSlash);
     lexical_items.insert(String::from("+"), TokenType::OpPlus);
@@ -89,7 +90,8 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let tokenizer = frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
+    let tokenizer =
+        frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
     let mut parser = Parser::new(tokenizer);
 
     let ast_opt = parser.parse_file();
@@ -120,7 +122,7 @@ fn main() -> ExitCode {
     let mut bc_emitter = BytecodeEmitter::default();
 
     let program_opt = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id);
-    
+
     if program_opt.is_none() {
         eprintln!("Error: Failed to compile program.");
         return ExitCode::FAILURE;
@@ -131,37 +133,45 @@ fn main() -> ExitCode {
     // disassemble_program(&program);
 
     let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
-    
+
     let pre_run_time = Instant::now();
     let engine_status = engine.run();
     let running_time = Instant::now() - pre_run_time;
 
-    println!("\x1b[1;33mFinished in {} microseconds\x1b[0m", running_time.as_micros());
+    println!(
+        "\x1b[1;33mFinished in {} microseconds\x1b[0m",
+        running_time.as_micros()
+    );
 
     match engine_status {
         ExecStatus::Ok => {
             println!("\x1b[1;32mOK\x1b[0m");
             ExitCode::SUCCESS
-        },
+        }
         ExecStatus::AccessError => {
             eprintln!("\x1b[1;31mRunError: AccessError of stack operation.\x1b[0m");
             ExitCode::FAILURE
-        },
+        }
         ExecStatus::ValueError => {
             eprintln!("\x1b[1;31mRunError: Invalid Value materialized.\x1b[0m");
             ExitCode::FAILURE
-        },
+        }
         ExecStatus::BadMath => {
             eprintln!("\x1b[1;31mRunError: Division by zero.\x1b[0m");
             ExitCode::FAILURE
-        },
+        }
         ExecStatus::IllegalInstruction => {
             eprintln!("\x1b[1;31mRunError: Illegal instruction fetched.\x1b[0m");
             ExitCode::FAILURE
-        },
+        }
         ExecStatus::BadArgs => {
             eprintln!("\x1b[1;31mRunError: Invalid argument passed to opcode.\x1b[0m");
             ExitCode::FAILURE
-        },
+        }
+        ExecStatus::NotOk => {
+            eprintln!("\x1b[1;31mRunError: Exited with non-zero status.\x1b[0m");
+            ExitCode::FAILURE
+        }
     }
+    // ExitCode::SUCCESS
 }

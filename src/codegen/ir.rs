@@ -26,8 +26,9 @@ pub enum Opcode {
     Sub,
     Mul,
     Div,
-    BeginBlock,
+    GenBeginLoop,
     GenPatch,
+    GenPatchBack,
     CompareEq,
     CompareNe,
     CompareLt,
@@ -54,8 +55,9 @@ impl Opcode {
             Self::Sub => 0,
             Self::Mul => 0,
             Self::Div => 0,
-            Self::BeginBlock => 0,
+            Self::GenBeginLoop => 0,
             Self::GenPatch => 0,
+            Self::GenPatchBack => 0,
             Self::CompareEq => 0,
             Self::CompareNe => 0,
             Self::CompareLt => 0,
@@ -83,8 +85,9 @@ impl Opcode {
             Self::Sub => -1,
             Self::Mul => -1,
             Self::Div => -1,
-            Self::BeginBlock => 0,
+            Self::GenBeginLoop => 0,
             Self::GenPatch => 0,
+            Self::GenPatchBack => 0,
             Self::CompareEq => -1,
             Self::CompareNe => -1,
             Self::CompareLt => -1,
@@ -93,10 +96,10 @@ impl Opcode {
             Self::JumpElse => -1,
             Self::Jump => 0,
             Self::Return => -1000,
-            Self::Call => -1000,
+            Self::Call => 0,
         }
     }
- 
+
     pub fn get_name(&self) -> &'static str {
         match self {
             Self::Nop => "NOP",
@@ -111,8 +114,9 @@ impl Opcode {
             Self::Sub => "SUB",
             Self::Mul => "MUL",
             Self::Div => "DIV",
-            Self::BeginBlock => "#BEGIN_BLOCK",
+            Self::GenBeginLoop => "#GEN_BEGIN_LOOP",
             Self::GenPatch => "#GEN_PATCH",
+            Self::GenPatchBack => "#GEN_PATCH_BACK",
             Self::CompareEq => "CMP_EQ",
             Self::CompareNe => "CMP_NE",
             Self::CompareLt => "CMP_LT",
@@ -132,8 +136,6 @@ pub fn ast_op_to_ir_op(arg: OperatorTag) -> Opcode {
         OperatorTag::Noop => Opcode::Nop,
         // OperatorTag::Access => Opcode::Nop,
         OperatorTag::Negate => Opcode::Neg,
-        OperatorTag::Increment => Opcode::Inc,
-        OperatorTag::Decrement => Opcode::Dec,
         OperatorTag::Times => Opcode::Mul,
         OperatorTag::Slash => Opcode::Div,
         OperatorTag::Plus => Opcode::Add,
@@ -176,7 +178,7 @@ impl Instruction {
         match self {
             Self::Nonary(_) => None,
             Self::Unary(_, arg_0) => Some(arg_0),
-            Self::Binary(_, arg_0, _) => Some(arg_0)
+            Self::Binary(_, arg_0, _) => Some(arg_0),
         }
     }
 
@@ -248,7 +250,7 @@ impl Node {
 
 pub struct CFG {
     nodes: Vec<Node>,
-    count: i32
+    count: i32,
 }
 
 impl CFG {
@@ -284,7 +286,6 @@ impl CFG {
         self.nodes.get_mut(block_id as usize)
     }
 
-
     pub fn add_instruction_recent(&mut self, arg: Instruction) {
         if self.nodes.is_empty() {
             return;
@@ -308,9 +309,7 @@ impl CFG {
 
         let target_truthy_id = target_truthy_id_opt.unwrap();
 
-        Some(
-            self.nodes.get(target_truthy_id as usize).unwrap()
-        )
+        Some(self.nodes.get(target_truthy_id as usize).unwrap())
     }
 
     pub fn get_right_neighbor(&self, target: &Node) -> Option<&Node> {
@@ -320,9 +319,7 @@ impl CFG {
 
         let target_truthy_id = target_falsy_id_opt.unwrap();
 
-        Some(
-            self.nodes.get(target_truthy_id as usize).unwrap()
-        )
+        Some(self.nodes.get(target_truthy_id as usize).unwrap())
     }
 
     pub fn connect_nodes_by_id(&mut self, from_id: i32, to_id: i32) {

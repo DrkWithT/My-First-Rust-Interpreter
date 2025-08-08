@@ -27,6 +27,28 @@ pub enum OperatorTag {
     Assign
 }
 
+impl OperatorTag {
+    pub fn arity(&self) -> i32 {
+        match self {
+            Self::Noop => 0,
+            Self::Access => 2,
+            Self::Call => 1,
+            Self::Negate => 1,
+            Self::Increment => 1,
+            Self::Decrement => 1,
+            Self::Times => 2,
+            Self::Slash => 2,
+            Self::Plus => 2,
+            Self::Minus => 2,
+            Self::Equality => 2,
+            Self::Inequality => 2,
+            Self::LessThan => 2,
+            Self::GreaterThan => 2,
+            Self::Assign => 2,
+        }
+    }
+}
+
 pub trait TypeKind {
     fn is_primitive(&self) -> bool;
     fn is_sequence(&self) -> bool;

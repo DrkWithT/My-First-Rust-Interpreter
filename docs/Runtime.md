@@ -4,9 +4,9 @@
   - Pseudo-stack-based VM!
   - Bytecode is stored in chunks per function & constants are stored per chunk as a vector.
   - The call stack contains call frames which track:
-    - `saved_fn_id`: i32
-    - `saved_fn_ip`: i32
-    - `base_pos`: i32
+    - Caller's return address
+    - Callee arguments
+    - Caller's old rbp
   - The value stack contains data.
   - Variables become stack values offset from a base position from a call frame.
   - Planned: GC or ref-counting for chunky objects
@@ -30,8 +30,9 @@
  - `sub`
  - `mul`
  - `div`
- - `begin_block`: begins a branched-to IR block
- - `end_block`: ends a branched-to IR block
+ - `gen_begin_loop`: marks the start of a while loop's steps (adds a NOP)
+ - `gen_patch`: marks the previous IR step as the "patch" of a forward jump
+ - `gen_patch_back`: marks the previous while-loop starting step as the "patch" of a recent jump- results in a "backwards patch"
  - `compare_eq`
  - `compare_ne`
  - `compare_lt`

@@ -38,9 +38,10 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <variable-decl> ::= "let" <identifier> ":" <typename> "=" <compare> ";"
 <if> ::= "if" <compare> <block> (<else>)?
 <else> ::= "else" <block>
+<while> ::= "while" <compare> <block>
 <return> ::= "return" <compare> ";"
 <expr-stmt> ::= <assign> ";"
-<nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt>
+<nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt> | <while>
 <block> ::= { <nestable>* }
 <function-decl> ::= "fun" <identifier> <params> : <typename> <block>
 <params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
@@ -49,7 +50,6 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ```
 
 ### Roadmap
- - Support while loops (**PLANNED**)
  - Add native functions (**PLANNED**)
  - Add simple checks for types and declarations
  - Add optimization passes on IR

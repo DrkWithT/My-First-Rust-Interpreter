@@ -1,0 +1,23 @@
+fun iter_fib(n: int): int {
+    let iter: int = n;
+    let temp: int = 0;
+    let a: int = 0;
+    let b: int = 1;
+
+    while iter > 0 {
+        temp = a;
+        a = b;
+        b = temp + b;
+        iter = iter - 1;
+    }
+
+    return b;
+}
+
+fun main(): int {
+    if iter_fib(39) == 102334155 {
+        return 0;
+    }
+
+    return 1;
+}

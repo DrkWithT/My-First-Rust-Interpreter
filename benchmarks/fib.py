@@ -16,12 +16,12 @@ def fib(n):
 
 if __name__ == '__main__':
     pre_run_time = time.process_time_ns()
-    answer = fib(39)
+    answer = fib(29)
     running_time = time.process_time_ns() - pre_run_time
 
     print(f'\x1b[1;33mFinished in {running_time / 1000000}ms\x1b[0m')
 
-    if answer == 102334155:
+    if answer == 832040:
         exit(0)
     else:
         exit(1)

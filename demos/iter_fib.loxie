@@ -11,11 +11,11 @@ fun iter_fib(n: int): int {
         iter = iter - 1;
     }
 
-    return b;
+    return a;
 }
 
 fun main(): int {
-    if iter_fib(39) == 102334155 {
+    if iter_fib(40) == 102334155 {
         return 0;
     }
 

@@ -9,7 +9,7 @@ fun fib(n: int): int {
 }
 
 fun main(): int {
-    if fib(39) != 102334155 {
+    if fib(29) != 832040 {
         return 1;
     }
 

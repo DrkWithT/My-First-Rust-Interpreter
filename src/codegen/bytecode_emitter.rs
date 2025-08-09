@@ -30,6 +30,7 @@ fn convert_ir_arg_tag(arg: Region) -> ArgMode {
         Region::ArgStore => ArgMode::ArgumentId,
         // Region::ObjectHeap => ArgMode::HeapId,
         Region::Functions => ArgMode::ProcedureId,
+        Region::Natives => ArgMode::NativeId,
         // Region::BlockId => ArgMode::Foo,
         Region::BlockId => ArgMode::CodeOffset,
         _ => ArgMode::Dud,
@@ -196,6 +197,10 @@ impl BytecodeEmitter {
             Opcode::Return => {
                 self.temp_instructions
                     .push(bytecode::Instruction::Return(converted_arg_0));
+            },
+            Opcode::NativeCall => {
+                self.temp_instructions
+                    .push(bytecode::Instruction::NativeCall(converted_arg_0));
             },
             _ => {
                 eprintln!("Invalid unary variant.");

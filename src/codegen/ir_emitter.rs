@@ -5,15 +5,16 @@ use crate::frontend::ast::*;
 use crate::frontend::parser::ASTDecls;
 use crate::frontend::token::*;
 use crate::semantics::types::OperatorTag;
+use crate::utils::bundle::NativeBrief;
 use crate::vm::value::Value;
 
 type IRLinkPair = (i32, i32);
 pub type IRResult = (CFGStorage, Vec<Vec<Value>>, i32);
+type FuncInfo = (Locator, i32);
 
-/// NOTE: add logic to find main function ID during visitation!
-pub struct IREmitter {
+pub struct IREmitter<'b> {
     fun_locals: HashMap<String, Locator>,
-    fun_locations: HashMap<String, Locator>,
+    fun_locations: HashMap<String, FuncInfo>,
     result: CFGStorage,
 
     /// NOTE contains a Vec of corresponding constant Values per bytecode Chunk.
@@ -24,16 +25,17 @@ pub struct IREmitter {
 
     source_copy: String,
 
+    native_registry: &'b HashMap<&'static str, NativeBrief>,
+
     /// NOTE tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
-
     main_id: i32,
     skip_emit: bool,
     has_error: bool,
 }
 
-impl IREmitter {
-    pub fn new(old_src: &str) -> Self {
+impl<'b> IREmitter<'b> {
+    pub fn new(old_src: &str, native_mapping: &'b HashMap<&'static str, NativeBrief>) -> Self {
         Self {
             fun_locals: HashMap::new(),
             fun_locations: HashMap::new(),
@@ -41,6 +43,7 @@ impl IREmitter {
             proto_constants: Vec::<Vec<Value>>::new(),
             proto_links: Vec::<IRLinkPair>::new(),
             source_copy: String::from(old_src),
+            native_registry: native_mapping,
             relative_stack_offset: -1,
             main_id: -1,
             skip_emit: false,
@@ -48,7 +51,7 @@ impl IREmitter {
         }
     }
 
-    fn record_fun_by_name(&mut self, name: String) -> bool {
+    fn record_fun_by_name(&mut self, name: String, arity: i32) -> bool {
         if self.fun_locations.contains_key(name.as_str()) {
             return false;
         }
@@ -60,7 +63,7 @@ impl IREmitter {
         }
 
         self.fun_locations
-            .insert(name, (Region::Functions, next_fun_id as i32));
+            .insert(name, ((Region::Functions, next_fun_id as i32), arity));
 
         true
     }
@@ -104,8 +107,20 @@ impl IREmitter {
     fn lookup_locator_of(&self, name: &str) -> Option<Locator> {
         if self.fun_locals.contains_key(name) {
             return Some(self.fun_locals.get(name).unwrap().clone());
+        } else if self.native_registry.contains_key(name) {
+            return Some((Region::Natives, self.native_registry.get(name).unwrap().id));
         } else if self.fun_locations.contains_key(name) {
-            return Some(self.fun_locations.get(name).unwrap().clone());
+            return Some(self.fun_locations.get(name).unwrap().clone().0);
+        }
+
+        None
+    }
+
+    fn lookup_fun_arity(&self, fun_name: &str) -> Option<i32> {
+        if self.native_registry.contains_key(fun_name) {
+            return Some(self.native_registry.get(fun_name).unwrap().arity);
+        } else if self.fun_locations.contains_key(fun_name) {
+            return Some(self.fun_locations.get(fun_name).unwrap().1);
         }
 
         None
@@ -160,7 +175,7 @@ impl IREmitter {
     }
 }
 
-impl ExprVisitor<Option<Locator>> for IREmitter {
+impl ExprVisitor<Option<Locator>> for IREmitter<'_> {
     fn visit_primitive(&mut self, e: &Primitive) -> Option<Locator> {
         let literal_token_ref = e.get_token();
         let literal_lexeme = literal_token_ref.to_lexeme_str(&self.source_copy).unwrap();
@@ -243,23 +258,39 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
         callee_locator_opt.as_ref()?;
 
         let callee_locator = callee_locator_opt.unwrap();
+
+        let callee_name = e.get_callee().get_token_opt().unwrap().to_lexeme_str(&self.source_copy).unwrap_or("");
+
+        let callee_arity = self.lookup_fun_arity(callee_name).unwrap_or(0);
+
         let calling_args = e.get_args();
-        let mut calling_arg_count = 0;
         let result_locator = (Region::TempStack, self.get_relative_offset() + 1);
 
         // NOTE: all args are temporary values and the consuming function call will automatically pop them all...
         for arg_ref in calling_args {
             arg_ref.accept_visitor(self)?;
-
-            calling_arg_count += 1;
         }
 
-        self.emit_step(Instruction::Binary(
-            Opcode::Call,
-            callee_locator,
-            (Region::Immediate, calling_arg_count),
-        ));
-        self.update_relative_offset(1 - calling_arg_count);
+        match callee_locator.0 {
+            Region::Natives => {
+                self.emit_step(Instruction::Unary(
+                    Opcode::NativeCall,
+                    callee_locator,
+                ));
+            },
+            Region::Functions => {
+                self.emit_step(Instruction::Binary(
+                    Opcode::Call,
+                    callee_locator,
+                    (Region::Immediate, callee_arity),
+                ));
+            },
+            _ => {
+                return None;
+            }
+        }
+
+        self.update_relative_offset(1 - callee_arity);
 
         Some(result_locator)
     }
@@ -306,7 +337,7 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
             let rhs_locator_opt = e.get_rhs().accept_visitor(self);
             rhs_locator_opt.as_ref()?;
             rhs_locator = rhs_locator_opt.unwrap();
-            
+
             self.skip_emit = lhs_arity == 0;
             let lhs_locator_opt = e.get_lhs().accept_visitor(self);
             lhs_locator_opt.as_ref()?;
@@ -349,12 +380,11 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
     }
 }
 
-impl StmtVisitor<bool> for IREmitter {
+impl StmtVisitor<bool> for IREmitter<'_> {
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
         self.enter_fun_scope();
         let function_name =
         String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
-        let is_func_name_recorded = self.record_fun_by_name(function_name.clone());
         let mut arg_id = 0;
 
         if let Some(maybe_main_loc) = self.lookup_locator_of(&function_name) {
@@ -375,6 +405,8 @@ impl StmtVisitor<bool> for IREmitter {
 
             arg_id += 1;
         }
+
+        let is_func_name_recorded = self.record_fun_by_name(function_name.clone(), arg_id);
 
         if !s.get_body().accept_visitor(self) {
             eprintln!("Oops: failed to generate function body from declaration");

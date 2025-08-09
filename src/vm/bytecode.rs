@@ -12,6 +12,7 @@ pub enum ArgMode {
     CodeOffset,
     // HeapId,
     ProcedureId,
+    NativeId,
 }
 
 impl ArgMode {
@@ -24,6 +25,7 @@ impl ArgMode {
             Self::CodeOffset => "code-pos",
             // Self::HeapId => "heap-id",
             Self::ProcedureId => "proc-id",
+            Self::NativeId => "native-id",
         }
     }
 }
@@ -52,7 +54,7 @@ pub enum Instruction {
     Jump(Argument),
     Return(Argument),
     Call(Argument, Argument),
-    // NativeCall(i32),
+    NativeCall(Argument),
 }
 
 impl Instruction {

@@ -33,6 +33,7 @@ pub trait ExprVisitor<Res> {
 
 pub trait Expr {
     fn get_operator(&self) -> types::OperatorTag;
+    fn get_token_opt(&self) -> Option<Token>;
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind>;
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator>;
 }
@@ -54,6 +55,10 @@ impl Primitive {
 impl Expr for Primitive {
     fn get_operator(&self) -> types::OperatorTag {
         types::OperatorTag::Noop.clone()
+    }
+
+    fn get_token_opt(&self) -> Option<Token> {
+        Some(*self.get_token())
     }
 
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind> {
@@ -98,6 +103,10 @@ impl Expr for Call {
         types::OperatorTag::Call
     }
 
+    fn get_token_opt(&self) -> Option<Token> {
+        None
+    }
+
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind> {
         Box::new(types::PrimitiveInfo::new(types::PrimitiveTag::Unknown))
     }
@@ -137,6 +146,10 @@ impl Unary {
 impl Expr for Unary {
     fn get_operator(&self) -> types::OperatorTag {
         self.op_tag.clone()
+    }
+
+    fn get_token_opt(&self) -> Option<Token> {
+        None
     }
 
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind> {
@@ -184,6 +197,10 @@ impl Binary {
 impl Expr for Binary {
     fn get_operator(&self) -> types::OperatorTag {
         self.op_tag.clone()
+    }
+
+    fn get_token_opt(&self) -> Option<Token> {
+        None
     }
 
     /// NOTE: self-deduction of any binary expr here is too complex, so I leave that for the semantic checker...

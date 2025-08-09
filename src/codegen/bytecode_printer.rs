@@ -97,6 +97,11 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 disassemble_op_arg(arg_1);
                 println!();
             },
+            Instruction::NativeCall(native_id) => {
+                print!("NATIVE_CALL");
+                disassemble_op_arg(native_id);
+                println!();
+            },
         }
     }
 }
@@ -106,7 +111,7 @@ pub fn disassemble_program(program: &Program) {
 
     for proc_entry in program.get_procedures() {
         let proc_id = proc_entry.get_id();
-        
+
         if proc_id == main_proc_id {
             println!("proc (main):\n");
         } else {

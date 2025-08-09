@@ -8,6 +8,7 @@ pub enum Region {
     ArgStore,
     ObjectHeap,
     Functions,
+    Natives,
     BlockId,
 }
 
@@ -38,6 +39,7 @@ pub enum Opcode {
     Jump,
     Return,
     Call,
+    NativeCall,
 }
 
 impl Opcode {
@@ -66,7 +68,8 @@ impl Opcode {
             Self::JumpElse => 2,
             Self::Jump => 1,
             Self::Return => 1,
-            Self::Call => 1,
+            Self::Call => 2,
+            Self::NativeCall => 2,
         }
     }
 
@@ -97,6 +100,7 @@ impl Opcode {
             Self::Jump => 0,
             Self::Return => -1000,
             Self::Call => 0,
+            Self::NativeCall => 0,
         }
     }
 
@@ -126,6 +130,7 @@ impl Opcode {
             Self::Jump => "JMP",
             Self::Return => "RET",
             Self::Call => "CALL",
+            Self::NativeCall => "NATIVE_CALL",
         }
     }
 }

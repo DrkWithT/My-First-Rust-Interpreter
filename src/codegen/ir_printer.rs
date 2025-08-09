@@ -11,6 +11,7 @@ fn format_locator(loc: &Locator) -> String {
         Region::ArgStore => format!("args:{}", *loc_id),
         Region::ObjectHeap => format!("object:{}", *loc_id),
         Region::Functions => format!("function:{}", *loc_id),
+        Region::Natives => format!("natives:{}", *loc_id),
         Region::BlockId => format!("block:{}", *loc_id),
     }
 }

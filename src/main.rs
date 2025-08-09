@@ -11,7 +11,7 @@ pub mod semantics;
 pub mod vm;
 
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
-// use crate::codegen::bytecode_printer::disassemble_program;
+use crate::codegen::bytecode_printer::disassemble_program;
 use crate::codegen::ir_emitter::IREmitter;
 // use crate::codegen::ir_printer::print_cfg;
 use crate::frontend::parser::*;
@@ -130,7 +130,7 @@ fn main() -> ExitCode {
 
     let program = program_opt.unwrap();
 
-    // disassemble_program(&program);
+    disassemble_program(&program);
 
     let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
 

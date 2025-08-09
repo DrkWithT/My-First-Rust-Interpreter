@@ -68,7 +68,8 @@ impl IREmitter {
     fn enter_fun_scope(&mut self) {
         self.result.push(CFG::new());
         self.proto_constants.push(Vec::new());
-        self.reset_relative_offset();
+
+        self.reset_relative_offset(-1);
     }
 
     fn leave_fun_scope(&mut self) {
@@ -129,8 +130,8 @@ impl IREmitter {
         self.relative_stack_offset
     }
 
-    fn reset_relative_offset(&mut self) {
-        self.relative_stack_offset = -1;
+    fn reset_relative_offset(&mut self, arg: i32) {
+        self.relative_stack_offset = arg;
     }
 
     fn update_relative_offset(&mut self, count: i32) {
@@ -234,19 +235,22 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
 
     /// NOTE: Here, the visitation of the callee part of the call-expr results in an extra function PUSH- Removal of the PUSH is needed for correctness, as the engine doesn't support 1st-class functions yet... See `visit_primitive()` where the function name is checked!
     fn visit_call(&mut self, e: &Call) -> Option<Locator> {
+        let old_skip_emit = self.skip_emit;
+        self.skip_emit = true;
         let callee_locator_opt = e.get_callee().accept_visitor(self);
+        self.skip_emit = old_skip_emit;
 
         callee_locator_opt.as_ref()?;
 
         let callee_locator = callee_locator_opt.unwrap();
         let calling_args = e.get_args();
         let mut calling_arg_count = 0;
+        let result_locator = (Region::TempStack, self.get_relative_offset() + 1);
 
         // NOTE: all args are temporary values and the consuming function call will automatically pop them all...
         for arg_ref in calling_args {
             arg_ref.accept_visitor(self)?;
 
-            self.update_relative_offset(1);
             calling_arg_count += 1;
         }
 
@@ -255,9 +259,9 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
             callee_locator,
             (Region::Immediate, calling_arg_count),
         ));
-        self.update_relative_offset(2 - calling_arg_count);
+        self.update_relative_offset(1 - calling_arg_count);
 
-        Some((Region::TempStack, self.get_relative_offset() + 1))
+        Some(result_locator)
     }
 
     // fn visit_array(&self) -> Locator {}
@@ -348,11 +352,17 @@ impl ExprVisitor<Option<Locator>> for IREmitter {
 impl StmtVisitor<bool> for IREmitter {
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
         self.enter_fun_scope();
-
         let function_name =
-            String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
-        let is_func_name_recorded = self.record_fun_by_name(function_name);
+        String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
+        let is_func_name_recorded = self.record_fun_by_name(function_name.clone());
         let mut arg_id = 0;
+
+        if let Some(maybe_main_loc) = self.lookup_locator_of(&function_name) {
+            // Since the initial main call started upon an empty stack (rsp = -1), adjust the offset accordingly.
+            if maybe_main_loc.1 == self.main_id {
+                self.reset_relative_offset(-1);
+            }
+        }
 
         #[allow(clippy::explicit_counter_loop)]
         for param in s.get_params() {
@@ -532,16 +542,37 @@ impl StmtVisitor<bool> for IREmitter {
 
     fn visit_return(&mut self, s: &Return) -> bool {
         let result_locator_opt = s.get_result().accept_visitor(self);
+        let result_delta = ast_op_to_ir_op(s.get_result().get_operator()).get_stack_delta();
 
         if result_locator_opt.is_none() {
             eprintln!("Oops: failed to find locator for return result");
             return false;
         }
 
+        let checked_locator = if let Some(result_locator) = result_locator_opt {
+            let (result_region, result_n) = result_locator.clone();
+
+            match result_region {
+                Region::Immediate | Region::ArgStore => result_locator,
+                Region::TempStack => (result_region, result_n + result_delta),
+                _ => (Region::Immediate, -1),
+            }
+        } else {
+            (Region::Immediate, -1)
+        };
+
+        if checked_locator.1 == -1 {
+            eprintln!("GenError: failed to find valid locator for return statement- This may be a bug. :(");
+            self.has_error = true;
+            return false;
+        }
+
         self.emit_step(Instruction::Unary(
             Opcode::Return,
-            result_locator_opt.unwrap(),
+            checked_locator,
         ));
+
+        self.reset_relative_offset(0);
 
         true
     }

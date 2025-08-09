@@ -1,0 +1,11 @@
+# first native function test
+
+fun main(): int {
+    let my_number: int = read_int();
+
+    if my_number > 0 {
+        return 0;
+    }
+
+    return 1;
+}

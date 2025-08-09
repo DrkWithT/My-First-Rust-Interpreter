@@ -42,6 +42,7 @@
  - `jump <dest?>`
  - `return <src-id>`
  - `call <function-id> <argc>`
+ - `native_call <native-function-id>`
 
 ### Opcodes
  - `load_const <constant-id>`
@@ -63,3 +64,4 @@
  - `jump <new-ip>`
  - `return <src-slot>`
  - `call <function-id> <argc>`
+ - `native_call <native-function-id>`

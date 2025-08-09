@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use crate::utils::bundle::Bundle;
 use crate::vm::bytecode::{self, ArgMode, Program};
 use crate::vm::callable::ExecStatus;
 use crate::vm::value::Value;
@@ -124,7 +125,7 @@ impl Engine {
         }
     }
 
-    fn push_in(&mut self, temp: Value) {
+    pub fn push_in(&mut self, temp: Value) {
         if self.rsp > self.stack_limit {
             eprintln!(
                 "RunError: invalid stack top- rbp = {}, rsp = {}",
@@ -148,7 +149,7 @@ impl Engine {
         *self.stack.get_mut(self.rsp as usize).unwrap() = temp;
     }
 
-    fn pop_off(&mut self) -> Option<Value> {
+    pub fn pop_off(&mut self) -> Option<Value> {
         if self.rsp < 0 {
             self.status = ExecStatus::AccessError;
             return None;
@@ -555,13 +556,19 @@ impl Engine {
         self.rbp = self.rsp + 1;
     }
 
-    // fn do_native_call(&mut self) {}
+    fn do_native_call(&mut self, natives: &Bundle, native_arg: bytecode::Argument) {
+        unsafe {
+            self.status = natives.get_native(native_arg.1)(self);
+        }
+
+        self.rip += 1;
+    }
 
     fn is_done(&mut self) -> bool {
         self.frames.is_empty() || self.status != ExecStatus::Ok
     }
 
-    pub fn run(&mut self) -> ExecStatus {
+    pub fn run(&mut self, natives: &Bundle) -> ExecStatus {
         while !self.is_done() {
             let next_instr = self.fetch_instruction();
 
@@ -634,9 +641,12 @@ impl Engine {
                 bytecode::Instruction::Return(source) => {
                     self.do_return(*source);
                 }
-                bytecode::Instruction::Call(proc_id, arg_count) => {
-                    self.do_call(*proc_id, *arg_count);
-                }
+                bytecode::Instruction::Call(proc_id, arity) => {
+                    self.do_call(*proc_id, *arity);
+                },
+                bytecode::Instruction::NativeCall(native_id) => {
+                    self.do_native_call(natives, *native_id);
+                },
             }
         }
 

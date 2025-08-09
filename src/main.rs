@@ -8,6 +8,7 @@ use std::time::Instant;
 pub mod codegen;
 pub mod frontend;
 pub mod semantics;
+pub mod utils;
 pub mod vm;
 
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
@@ -16,6 +17,8 @@ use crate::codegen::ir_emitter::IREmitter;
 // use crate::codegen::ir_printer::print_cfg;
 use crate::frontend::parser::*;
 use crate::frontend::token::*;
+use crate::utils::bundle::Bundle;
+use crate::utils::loxie_stdio;
 use crate::vm::callable::ExecStatus;
 use crate::vm::engine::Engine;
 
@@ -45,6 +48,9 @@ fn main() -> ExitCode {
         println!("usage: ./conchvm [--help | --version | <file-name>]");
         return ExitCode::SUCCESS;
     }
+
+    let mut global_natives = Bundle::new();
+    global_natives.register_native("read_int", Box::new(loxie_stdio::native_read_int), 0);
 
     let first_arg_copy_str = first_arg_str.clone();
     let source_path = Path::new(first_arg_copy_str.as_str());
@@ -105,7 +111,7 @@ fn main() -> ExitCode {
 
     println!("function declaration count: {}", ast_decls.len());
 
-    let mut ir_emitter = IREmitter::new(source_text.as_str());
+    let mut ir_emitter = IREmitter::new(source_text.as_str(), global_natives.peek_registry());
     let ir_opt = ir_emitter.emit_bytecode_from(&ast_decls);
 
     if ir_opt.is_none() {
@@ -135,7 +141,7 @@ fn main() -> ExitCode {
     let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
 
     let pre_run_time = Instant::now();
-    let engine_status = engine.run();
+    let engine_status = engine.run(&global_natives);
     let running_time = Instant::now() - pre_run_time;
 
     println!(

@@ -50,7 +50,7 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 ```
 
 ### Roadmap
- - Add native functions (**PLANNED**)
+ - Add native functions (**EXPERIMENTAL**)
  - Add simple checks for types and declarations
  - Add optimization passes on IR
     - Instruction substitutions

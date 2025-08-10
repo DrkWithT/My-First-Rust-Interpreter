@@ -14,7 +14,7 @@ pub mod vm;
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
 use crate::codegen::bytecode_printer::disassemble_program;
 use crate::codegen::ir_emitter::IREmitter;
-// use crate::codegen::ir_printer::print_cfg;
+use crate::codegen::ir_printer::print_cfg;
 use crate::frontend::parser::*;
 use crate::frontend::token::*;
 use crate::utils::bundle::Bundle;
@@ -60,7 +60,6 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // todo: implement lexer and then use it here...
     let source_text_opt = fs::read_to_string(source_path);
 
     if source_text_opt.is_err() {
@@ -121,9 +120,9 @@ fn main() -> ExitCode {
     let (cfg_list, mut constant_groups_list, main_id) = ir_opt.unwrap();
 
     // TODO: add printing for Value constant region.
-    // for graph in &cfg_list {
-    //     print_cfg(graph);
-    // }
+    for graph in &cfg_list {
+        print_cfg(graph);
+    }
 
     let mut bc_emitter = BytecodeEmitter::default();
 

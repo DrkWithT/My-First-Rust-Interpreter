@@ -21,7 +21,6 @@ impl ParamDecl {
     }
 }
 
-/// TODO: implement ExprVisitor<bool> for semantic checks later...
 pub trait ExprVisitor<Res> {
     fn visit_primitive(&mut self, e: &Primitive) -> Res;
     fn visit_call(&mut self, e: &Call) -> Res;
@@ -213,7 +212,6 @@ impl Expr for Binary {
     }
 }
 
-/// TODO: implement StmtVisitor<bool> for semantic checks later...
 pub trait StmtVisitor<Res> {
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;

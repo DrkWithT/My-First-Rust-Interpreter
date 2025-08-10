@@ -581,7 +581,6 @@ impl Parser {
         parameters
     }
 
-    // TODO: implement this method.
     pub fn parse_file(&mut self) -> ParseResult {
         self.consume_any();
 

@@ -7,7 +7,7 @@ fun accumulate(a: int, b: int, it: int): int {
 }
 
 fun fib(term: int): int {
-    return accumulate(0, 1, term + 2);
+    return accumulate(1, 1, term);
 }
 
 fun main(): int {

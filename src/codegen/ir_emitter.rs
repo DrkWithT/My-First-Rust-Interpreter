@@ -319,7 +319,6 @@ impl ExprVisitor<Option<Locator>> for IREmitter<'_> {
         Some(result_locator)
     }
 
-    /// FIXME: this function fails to consider cases of `a = a + 1`: either a wrong push occurs before the replace, or the LHS gets pushed at the wrong time. Fix when to emit operands of binary... make helpers??
     fn visit_binary(&mut self, e: &Binary) -> Option<Locator> {
         let expr_opcode = ast_op_to_ir_op(e.get_operator());
         let found_assign = expr_opcode == Opcode::Replace;
@@ -581,7 +580,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             return false;
         }
 
-        let checked_locator = if let Some(result_locator) = result_locator_opt {
+        let mut checked_locator = if let Some(result_locator) = result_locator_opt {
             let (result_region, result_n) = result_locator.clone();
 
             match result_region {
@@ -594,9 +593,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
         };
 
         if checked_locator.1 == -1 {
-            eprintln!("GenError: failed to find valid locator for return statement- This may be a bug. :(");
-            self.has_error = true;
-            return false;
+            checked_locator.1 += 1;
         }
 
         self.emit_step(Instruction::Unary(
@@ -604,7 +601,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             checked_locator,
         ));
 
-        self.reset_relative_offset(0);
+        self.reset_relative_offset(-1);
 
         true
     }

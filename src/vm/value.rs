@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result};
+
 #[repr(i32)]
 #[derive(Clone, Copy)]
 pub enum ObjectTag {
@@ -21,6 +23,17 @@ pub enum Value {
     // Str(HeapRef),
     // Array(HeapRef),
     // Callable(HeapRef),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::Bool(flag) => write!(f, "{}", *flag),
+            Self::Int(value) => write!(f, "{}", *value),
+            Self::Float(value) => write!(f, "{}", *value),
+            _ => write!(f, "none"),
+        }
+    }
 }
 
 impl From<Value> for bool {

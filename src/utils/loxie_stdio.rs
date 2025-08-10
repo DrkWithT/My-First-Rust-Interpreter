@@ -20,3 +20,17 @@ pub fn native_read_int(engine_ref: &mut Engine) -> ExecStatus {
 
     ExecStatus::Ok
 }
+
+pub fn native_print_val(engine_ref: &mut Engine) -> ExecStatus {
+    let temp_value = engine_ref.pop_off();
+
+    if temp_value.is_none() {
+        engine_ref.push_in(Value::Bool(false));
+        ExecStatus::NotOk
+    } else {
+        println!("{}", temp_value.unwrap());
+
+        engine_ref.push_in(Value::Bool(true));
+        ExecStatus::Ok
+    }
+}

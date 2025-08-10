@@ -51,6 +51,7 @@ fn main() -> ExitCode {
 
     let mut global_natives = Bundle::new();
     global_natives.register_native("read_int", Box::new(loxie_stdio::native_read_int), 0);
+    global_natives.register_native("print_val", Box::new(loxie_stdio::native_print_val), 1);
 
     let first_arg_copy_str = first_arg_str.clone();
     let source_path = Path::new(first_arg_copy_str.as_str());

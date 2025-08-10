@@ -12,9 +12,9 @@ pub mod utils;
 pub mod vm;
 
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
-use crate::codegen::bytecode_printer::disassemble_program;
+// use crate::codegen::bytecode_printer::disassemble_program;
 use crate::codegen::ir_emitter::IREmitter;
-use crate::codegen::ir_printer::print_cfg;
+// use crate::codegen::ir_printer::print_cfg;
 use crate::frontend::parser::*;
 use crate::frontend::token::*;
 use crate::utils::bundle::Bundle;
@@ -120,9 +120,9 @@ fn main() -> ExitCode {
     let (cfg_list, mut constant_groups_list, main_id) = ir_opt.unwrap();
 
     // TODO: add printing for Value constant region.
-    for graph in &cfg_list {
-        print_cfg(graph);
-    }
+    // for graph in &cfg_list {
+    //     print_cfg(graph);
+    // }
 
     let mut bc_emitter = BytecodeEmitter::default();
 
@@ -135,7 +135,7 @@ fn main() -> ExitCode {
 
     let program = program_opt.unwrap();
 
-    disassemble_program(&program);
+    // disassemble_program(&program);
 
     let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
 

@@ -76,11 +76,7 @@ pub fn print_cfg(function_cfg: &CFG) {
         let temp_left_id_opt = next_temp_ref.get_truthy_id();
 
         if let Some(temp_left) = next_left_opt {
-            let temp_left_id = if let Some(temp_id) = temp_left_id_opt {
-                temp_id
-            } else {
-                -1
-            };
+            let temp_left_id = temp_left_id_opt.unwrap_or(-1);
 
             if temp_left_id != -1 && !done_ids.contains(&temp_left_id) {
                 next_nodes.push_back(temp_left);
@@ -91,11 +87,7 @@ pub fn print_cfg(function_cfg: &CFG) {
         let temp_right_id_opt = next_temp_ref.get_falsy_id();
 
         if let Some(temp_right) = next_right_opt {
-            let temp_right_id = if let Some(temp_id_2) = temp_right_id_opt {
-                temp_id_2
-            } else {
-                -1
-            };
+            let temp_right_id = temp_right_id_opt.unwrap_or(-1);
 
             if temp_right_id != -1 && !done_ids.contains(&temp_right_id) {
                 next_nodes.push_back(temp_right);

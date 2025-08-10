@@ -5,14 +5,14 @@ pub fn native_read_int(engine_ref: &mut Engine) -> ExecStatus {
 
     let mut raw_input = String::new();
 
-    if !std::io::stdin().read_line(&mut raw_input).is_ok() {
+    if std::io::stdin().read_line(&mut raw_input).is_err() {
         return ExecStatus::NotOk;
     }
 
     let temp_int = raw_input.trim().parse::<i32>();
 
-    if !temp_int.is_ok() {
-        eprintln!("Invalid input for int: '{}'", raw_input);
+    if temp_int.is_err() {
+        eprintln!("Invalid input for int: '{raw_input}'");
         return ExecStatus::BadArgs;
     }
 

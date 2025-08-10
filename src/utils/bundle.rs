@@ -20,6 +20,7 @@ pub struct NativeBrief {
  * Defines the collection of native procedures used during runtime.
  * Stored state includes a registry table for native procedure names -> their ID's, the correspondingly ordered Vec of native routines, and an internal counter for registering ID's.
  */
+#[derive(Default)]
 pub struct Bundle {
     registry: HashMap<&'static str, NativeBrief>,
     routines: Vec<Callable<Engine>>,
@@ -50,7 +51,8 @@ impl Bundle {
         true
     }
 
-    /// NOTE: This Bundle method is unsafe for performance reasons, as index-checked dispatches to native functions would create unneeded slowdowns. Thus, all ID's passed must be valid!
+    /// # SAFETY
+    /// This Bundle method is unsafe for performance reasons, as index-checked dispatches to native functions would create unneeded slowdowns. Thus, all ID's passed must be valid!
     pub unsafe fn get_native(&self, native_id: i32) -> &Callable<Engine> {
         unsafe {
             self.routines.get_unchecked(native_id as usize)

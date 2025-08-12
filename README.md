@@ -13,15 +13,14 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - Built-in functions galore!
 
 ### Roadmap
- - Add native functions
-   - Add a `print_val()` function
- - Add simple checks for types and declarations
  - Add optimization passes on IR
     - Instruction substitutions
     - Dead code elimination
- - Support arrays
+ - Support heap objects!
  - Support strings
- - Support lambdas
+ - Support arrays
+ - Add more standard I/O native functions!
+ - Support lambdas?
 
 ### Other Docs
  - [Grammar Info](./docs/Grammar.md)

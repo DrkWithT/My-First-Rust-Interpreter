@@ -1,0 +1,11 @@
+# test type check on variables and assignments
+
+fun main(): int {
+    let answer: int = 42;
+    # TODO fix line numbering for binary-assign-expr errors & topic.
+    answer = false;
+
+    let x: int = false;
+
+    return 0;
+}

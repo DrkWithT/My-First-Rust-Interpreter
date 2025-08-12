@@ -1,0 +1,10 @@
+# test undefined variable name
+
+fun main(): int {
+    let a: int = 42;
+
+    # 'b' is not declared or defined, but the error is incorrect (type error vs. unknown name error)
+    b = 123;
+
+    return 0;
+}

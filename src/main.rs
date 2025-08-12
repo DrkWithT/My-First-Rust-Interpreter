@@ -11,12 +11,13 @@ pub mod semantics;
 pub mod utils;
 pub mod vm;
 
+use crate::frontend::parser::*;
+use crate::frontend::token::*;
+use crate::semantics::analyzer;
 use crate::codegen::bytecode_emitter::BytecodeEmitter;
 // use crate::codegen::bytecode_printer::disassemble_program;
 use crate::codegen::ir_emitter::IREmitter;
 // use crate::codegen::ir_printer::print_cfg;
-use crate::frontend::parser::*;
-use crate::frontend::token::*;
 use crate::utils::bundle::Bundle;
 use crate::utils::loxie_stdio;
 use crate::vm::callable::ExecStatus;
@@ -103,13 +104,18 @@ fn main() -> ExitCode {
     let ast_opt = parser.parse_file();
 
     if ast_opt.is_none() {
-        println!("Parsing failed, please see all errors above.");
+        eprintln!("Parsing failed, please see all errors above.");
         return ExitCode::FAILURE;
     }
 
     let ast_decls = ast_opt.unwrap();
 
-    println!("function declaration count: {}", ast_decls.len());
+    let mut analyzer = analyzer::Analyzer::new(source_text.as_str());
+
+    if !analyzer.check_source_unit(&ast_decls) {
+        eprintln!("Semantic checks failed, please see errors above.");
+        return ExitCode::FAILURE;
+    }
 
     let mut ir_emitter = IREmitter::new(source_text.as_str(), global_natives.peek_registry());
     let ir_opt = ir_emitter.emit_bytecode_from(&ast_decls);
@@ -130,7 +136,7 @@ fn main() -> ExitCode {
     let program_opt = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id);
 
     if program_opt.is_none() {
-        eprintln!("Error: Failed to compile program.");
+        eprintln!("Compilation failed, see errors above.");
         return ExitCode::FAILURE;
     }
 

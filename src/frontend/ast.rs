@@ -1,6 +1,7 @@
 use crate::codegen::ir::Locator;
 use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types;
+use crate::semantics::scope::SemanticNote;
 
 pub struct ParamDecl {
     name_token: Token,
@@ -21,7 +22,7 @@ impl ParamDecl {
     }
 }
 
-pub trait ExprVisitor<Res> {
+pub trait ExprVisitor<'evl, Res> {
     fn visit_primitive(&mut self, e: &Primitive) -> Res;
     fn visit_call(&mut self, e: &Call) -> Res;
     // fn visit_array(&self) -> Res;
@@ -35,6 +36,7 @@ pub trait Expr {
     fn get_token_opt(&self) -> Option<Token>;
     fn try_deduce_type(&self) -> Box<dyn types::TypeKind>;
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator>;
+    fn accept_visitor_sema(&self, visitor: &mut dyn ExprVisitor<SemanticNote>) -> SemanticNote;
 }
 
 pub struct Primitive {
@@ -76,6 +78,10 @@ impl Expr for Primitive {
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_primitive(self)
     }
+
+    fn accept_visitor_sema(&self, visitor: &mut dyn ExprVisitor<SemanticNote>) -> SemanticNote {
+        visitor.visit_primitive(self)
+    }
 }
 
 pub struct Call {
@@ -111,6 +117,10 @@ impl Expr for Call {
     }
 
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
+        visitor.visit_call(self)
+    }
+
+    fn accept_visitor_sema(&self, visitor: &mut dyn ExprVisitor<SemanticNote>) -> SemanticNote {
         visitor.visit_call(self)
     }
 }
@@ -171,6 +181,10 @@ impl Expr for Unary {
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
         visitor.visit_unary(self)
     }
+
+    fn accept_visitor_sema(&self, visitor: &mut dyn ExprVisitor<SemanticNote>) -> SemanticNote {
+        visitor.visit_unary(self)
+    }
 }
 
 pub struct Binary {
@@ -208,6 +222,10 @@ impl Expr for Binary {
     }
 
     fn accept_visitor(&self, visitor: &mut dyn ExprVisitor<Option<Locator>>) -> Option<Locator> {
+        visitor.visit_binary(self)
+    }
+
+    fn accept_visitor_sema(&self, visitor: &mut dyn ExprVisitor<SemanticNote>) -> SemanticNote {
         visitor.visit_binary(self)
     }
 }

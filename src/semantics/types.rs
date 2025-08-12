@@ -1,10 +1,26 @@
 #[repr(i32)]
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum PrimitiveTag {
     Unknown,
     Boolean,
     Integer,
     Floating
+}
+
+#[repr(i32)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum ValueCategoryTag {
+    /// undeclared thus invalid
+    Unknown,
+
+    /// possibly denotes type erasure
+    Anything,
+
+    /// name-bound values
+    Identity,
+
+    /// anonymous values
+    Temporary,
 }
 
 #[repr(i32)]
@@ -47,6 +63,34 @@ impl OperatorTag {
             Self::Assign => 2,
         }
     }
+
+    pub fn as_symbol(&self) -> &str {
+        match self {
+            Self::Noop => "(none)",
+            Self::Access => ".",
+            Self::Call => "(call)",
+            Self::Negate => "- (negate)",
+            Self::Increment => "++",
+            Self::Decrement => "--",
+            Self::Times => "*",
+            Self::Slash => "/",
+            Self::Plus => "+",
+            Self::Minus => "- (subtract)",
+            Self::Equality => "==",
+            Self::Inequality => "!=",
+            Self::LessThan => "<",
+            Self::GreaterThan => ">",
+            Self::Assign => "=",
+        }
+    }
+
+    pub fn is_homogeneously_typed(&self) -> bool {
+        matches!(self, Self::Noop | Self::Negate | Self::Times | Self::Slash | Self::Plus | Self::Minus | Self::Equality | Self::Inequality | Self::LessThan | Self::GreaterThan | Self::Assign)
+    }
+
+    pub fn is_value_group_sensitive(&self) -> bool {
+        matches!(self, Self::Assign)
+    }
 }
 
 pub trait TypeKind {
@@ -80,7 +124,7 @@ impl TypeKind for PrimitiveInfo {
     }
 
     fn typename(&self) -> String {
-        let temp_tag = self.tag.clone();
+        let temp_tag = self.tag;
 
         match temp_tag {
             PrimitiveTag::Boolean => String::from("bool"),
@@ -116,6 +160,52 @@ impl TypeKind for ArrayInfo {
     }
 
     fn typename(&self) -> String {
-        format!("[ {} : {} ]", self.n, self.item.typename())
+        format!("[{}:{}]", self.n, self.item.typename())
+    }
+}
+
+pub struct FunctionInfo {
+    inputs: Vec<Box<dyn TypeKind>>,
+    output: Box<dyn TypeKind>,
+}
+
+impl FunctionInfo {
+    pub fn new(input_types: Vec<Box<dyn TypeKind>>, output_type: Box<dyn TypeKind>) -> Self {
+        Self {
+            inputs: input_types,
+            output: output_type,
+        }
+    }
+}
+
+impl TypeKind for FunctionInfo {
+    fn is_primitive(&self) -> bool {
+        false
+    }
+
+    fn is_sequence(&self) -> bool {
+        false
+    }
+
+    fn is_callable(&self) -> bool {
+        true
+    }
+
+    fn typename(&self) -> String {
+        let mut result = String::new();
+
+        result.push('(');
+
+        for arg in &self.inputs {
+            let arg_typename_string = arg.typename();
+            let arg_typename: &str = arg_typename_string.as_str();
+            result.push_str(arg_typename);
+            result.push(' ');
+        }
+
+        result.push_str(") -> ");
+        result.push_str(self.output.typename().as_str());
+
+        result
     }
 }

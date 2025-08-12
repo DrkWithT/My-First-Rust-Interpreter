@@ -175,7 +175,7 @@ impl<'b> IREmitter<'b> {
     }
 }
 
-impl ExprVisitor<Option<Locator>> for IREmitter<'_> {
+impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
     fn visit_primitive(&mut self, e: &Primitive) -> Option<Locator> {
         let literal_token_ref = e.get_token();
         let literal_lexeme = literal_token_ref.to_lexeme_str(&self.source_copy).unwrap();

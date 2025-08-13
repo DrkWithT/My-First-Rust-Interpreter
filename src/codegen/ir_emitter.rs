@@ -380,6 +380,11 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
 }
 
 impl StmtVisitor<bool> for IREmitter<'_> {
+    #[allow(unused_variables)]
+    fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
+        true
+    }
+
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
         self.enter_fun_scope();
         let function_name =

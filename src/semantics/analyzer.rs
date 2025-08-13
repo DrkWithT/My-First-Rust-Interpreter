@@ -100,6 +100,8 @@ impl<'al2> Analyzer<'al2> {
         *pre_result_opt.unwrap().0
     }
 
+    /// ### TODO
+    /// Add support for function stub declarations which provide type info for native funcs.
     fn lookup_name_info(&self, name: &str) -> SemanticNote {
         self.scopes.lookup_name_info(name)
     }
@@ -251,8 +253,8 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
 
     fn visit_binary(&mut self, e: &Binary) -> SemanticNote {
         let expr_op = e.get_operator();
-        let expr_line_no = self.temp_token.line_no;
         let lhs_info = e.get_lhs().accept_visitor_sema(self);
+        let expr_line_no = self.temp_token.line_no;
         let rhs_info = e.get_rhs().accept_visitor_sema(self);
 
         if expr_op.is_homogeneously_typed() {
@@ -292,30 +294,69 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
 }
 
 impl StmtVisitor<bool> for Analyzer<'_> {
+    fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
+        let stub_name = s.get_name_token().to_lexeme_str(self.source_str).unwrap_or("");
+
+        let stub_ret_type = s.get_result_type().typename();
+        let stub_ret_type_id = self.record_type(stub_ret_type);
+
+        let mut stub_param_types = Vec::<i32>::new();
+        let stub_arity = s.get_params().len() as i32;
+
+        for param in s.get_params() {
+            let param_type_name = param.get_typing().typename();
+            let param_type_id = self.record_type(param_type_name.clone());
+
+            self.record_name_info(
+                param.get_name_token().to_lexeme_str(self.source_str).unwrap(),
+                SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
+                RecordInfoMode::AsVariable
+            );
+            
+            stub_param_types.push(param_type_id);
+        }
+
+        if !self.record_name_info(
+            stub_name,
+            SemanticNote::Callable(stub_param_types, stub_ret_type_id, stub_arity), RecordInfoMode::AsCallable
+        ) {
+            let redef_stub_msg = format!("Invalid redeclaration of procedure '{stub_name}'");
+            self.report_plain_error(redef_stub_msg.as_str());
+
+            return false;
+        }
+
+        true
+    }
+
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
         let fun_name = s.get_name_token().to_lexeme_str(self.source_str).unwrap_or("");
         
         let fun_ret_type = s.get_result_type().typename();
         let ret_type_id = self.record_type(fun_ret_type);
 
-        let mut fun_arg_types = Vec::<i32>::new();
+        let mut fun_param_types = Vec::<i32>::new();
         let fun_arity = s.get_params().len() as i32;
 
         self.scopes.enter_scope(fun_name);
 
         for param in s.get_params() {
-            let arg_type_name = param.get_typing().typename();
-            let arg_type_id = self.record_type(arg_type_name.clone());
+            let param_type_name = param.get_typing().typename();
+            let param_type_id = self.record_type(param_type_name.clone());
+
             self.record_name_info(
                 param.get_name_token().to_lexeme_str(self.source_str).unwrap(),
-                SemanticNote::DataValue(arg_type_id, ValueCategoryTag::Identity),
+                SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
                 RecordInfoMode::AsVariable
             );
 
-            fun_arg_types.push(arg_type_id);
+            fun_param_types.push(param_type_id);
         }
 
-        if !self.record_name_info(fun_name, SemanticNote::Callable(fun_arg_types, ret_type_id, fun_arity), RecordInfoMode::AsCallable) {
+        if !self.record_name_info(fun_name, SemanticNote::Callable(fun_param_types, ret_type_id, fun_arity), RecordInfoMode::AsCallable) {
+            let redef_fun_msg = format!("Invalid redeclaration of procedure '{fun_name}'");
+            self.report_plain_error(redef_fun_msg.as_str());
+
             self.scopes.leave_scope();
             return false;
         }
@@ -342,10 +383,21 @@ impl StmtVisitor<bool> for Analyzer<'_> {
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> bool {
         let var_name_token_ref = s.get_name_token();
         let var_name_lexeme = var_name_token_ref.to_lexeme_str(self.source_str).unwrap_or("");
+        let var_name_line_no = var_name_token_ref.line_no;
 
         let var_type_name = s.get_typing().typename();
         let var_type_id = self.record_type(var_type_name);
-        self.record_name_info(var_name_lexeme, SemanticNote::DataValue(var_type_id, ValueCategoryTag::Identity), RecordInfoMode::AsVariable);
+
+        if !self.record_name_info(
+            var_name_lexeme,
+            SemanticNote::DataValue(var_type_id, ValueCategoryTag::Identity),
+            RecordInfoMode::AsVariable
+        ) {
+            let redef_var_msg = format!("Invalid redeclaration of variable '{var_name_lexeme}'");
+            self.report_plain_error(redef_var_msg.as_str());
+
+            return false;
+        }
 
         let init_info = s.get_init_expr().accept_visitor_sema(self);
 
@@ -354,7 +406,7 @@ impl StmtVisitor<bool> for Analyzer<'_> {
         } else { -1 };
 
         if var_type_id != init_type_id {
-            let bad_rhs_msg = format!("Cannot set variable '{}' at Ln. {} to the RHS expression- Its type was mismatched (type-id {}).", var_name_lexeme, var_name_token_ref.line_no, init_type_id);
+            let bad_rhs_msg = format!("Cannot set variable '{var_name_lexeme}' at Ln. {var_name_line_no} to the RHS expression- Its type was mismatched (type-id {init_type_id}).");
             self.report_culprit_error(var_name_token_ref, bad_rhs_msg.as_str());
 
             return false;

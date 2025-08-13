@@ -74,6 +74,7 @@ fn main() -> ExitCode {
 
     let mut lexical_items = HashMap::<String, TokenType>::new();
 
+    lexical_items.insert(String::from("foreign"), TokenType::Keyword);
     lexical_items.insert(String::from("fun"), TokenType::Keyword);
     lexical_items.insert(String::from("let"), TokenType::Keyword);
     lexical_items.insert(String::from("if"), TokenType::Keyword);
@@ -110,7 +111,7 @@ fn main() -> ExitCode {
 
     let ast_decls = ast_opt.unwrap();
 
-    let mut analyzer = analyzer::Analyzer::new(source_text.as_str());
+    let mut analyzer = analyzer::Analyzer::new(source_text.as_str(), global_natives.peek_registry());
 
     if !analyzer.check_source_unit(&ast_decls) {
         eprintln!("Semantic checks failed, please see errors above.");

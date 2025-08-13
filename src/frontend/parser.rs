@@ -522,6 +522,26 @@ impl Parser {
         Some(Box::new(Block::new(items)))
     }
 
+    fn parse_foreign_stub(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_any();
+
+        let stub_name_token = *self.current();
+        self.consume_of([TokenType::Identifier]);
+
+        let stub_params = self.parse_function_params();
+
+        self.consume_of([TokenType::Colon]);
+        let stub_ret_type_box = self.parse_type();
+
+        self.consume_of([TokenType::Semicolon]);
+
+        Some(Box::new(ForeignStub::new(
+            stub_name_token,
+            stub_params,
+            stub_ret_type_box
+        )))
+    }
+
     fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_of([TokenType::Keyword]);
 
@@ -581,13 +601,23 @@ impl Parser {
         parameters
     }
 
+    fn parse_top_decl(&mut self) -> Option<Box<dyn Stmt>> {
+        let start_word = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+
+        match start_word {
+            "foreign" => self.parse_foreign_stub(),
+            "fun" => self.parse_function_decl(),
+            _ => None
+        }
+    }
+
     pub fn parse_file(&mut self) -> ParseResult {
         self.consume_any();
 
         let mut all_top_stmts = ASTDecls::new();
 
         while !self.at_eof() {
-            let func_decl_opt = self.parse_function_decl();
+            let func_decl_opt = self.parse_top_decl();
 
             func_decl_opt.as_ref()?;
 

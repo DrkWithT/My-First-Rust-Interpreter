@@ -231,6 +231,7 @@ impl Expr for Binary {
 }
 
 pub trait StmtVisitor<Res> {
+    fn visit_foreign_stub(&mut self, s: &ForeignStub) -> Res;
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> Res;
@@ -245,6 +246,52 @@ pub trait Stmt {
     fn is_declaration(&self) -> bool;
     fn is_expr_stmt(&self) -> bool;
     fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool;
+}
+
+pub struct ForeignStub {
+    name_token: Token,
+    params: Vec<ParamDecl>,
+    result_typing: Box<dyn types::TypeKind>,
+}
+
+impl ForeignStub {
+    pub fn new(name_token_arg: Token, params_arg: Vec<ParamDecl>, result_typing_arg: Box<dyn types::TypeKind>) -> Self {
+        Self {
+            name_token: name_token_arg,
+            params: params_arg,
+            result_typing: result_typing_arg,
+        }
+    }
+
+    pub fn get_name_token(&self) -> &Token {
+        &self.name_token
+    }
+
+    pub fn get_params(&self) -> &Vec<ParamDecl> {
+        &self.params
+    }
+
+    pub fn get_result_type(&self) -> &Box<dyn types::TypeKind> {
+        &self.result_typing
+    }
+}
+
+impl Stmt for ForeignStub {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_foreign_stub(self)
+    }
 }
 
 pub struct FunctionDecl {

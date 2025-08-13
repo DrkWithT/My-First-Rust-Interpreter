@@ -12,12 +12,9 @@ pub mod compiler;
 pub mod utils;
 pub mod vm;
 
-use crate::frontend::parser::*;
+use crate::compiler::driver::CompilerMain;
 use crate::frontend::token::*;
-use crate::semantics::analyzer;
-use crate::codegen::bytecode_emitter::BytecodeEmitter;
 // use crate::codegen::bytecode_printer::disassemble_program;
-use crate::codegen::ir_emitter::IREmitter;
 // use crate::codegen::ir_printer::print_cfg;
 use crate::utils::bundle::Bundle;
 use crate::utils::loxie_stdio;
@@ -31,8 +28,6 @@ const CONCH_VERSION_PATCH: i32 = 0;
 const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
 
 fn main() -> ExitCode {
-    todo!("Refactor all main logic to use the compiler driver for multi-file programs.");
-
     let mut arg_list = env::args();
     let arg_count: usize = arg_list.len() - 1;
 
@@ -58,7 +53,8 @@ fn main() -> ExitCode {
     global_natives.register_native("print_val", Box::new(loxie_stdio::native_print_val), 1);
 
     let first_arg_copy_str = first_arg_str.clone();
-    let source_path = Path::new(first_arg_copy_str.as_str());
+    let first_arg_str_view = first_arg_copy_str.as_str();
+    let source_path = Path::new(first_arg_str_view);
 
     if !source_path.exists() {
         println!("Path not found: '{}'", source_path.to_str().expect(""));
@@ -73,10 +69,8 @@ fn main() -> ExitCode {
     }
 
     let source_text = source_text_opt.expect("Failed to unbox source string?");
-    let source_length = source_text.len();
 
     let mut lexical_items = HashMap::<String, TokenType>::new();
-
     lexical_items.insert(String::from("foreign"), TokenType::Keyword);
     lexical_items.insert(String::from("fun"), TokenType::Keyword);
     lexical_items.insert(String::from("let"), TokenType::Keyword);
@@ -101,43 +95,9 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let tokenizer =
-        frontend::lexer::Lexer::new(lexical_items, &source_text, 0, source_length, 1, 1);
-    let mut parser = Parser::new(tokenizer);
+    let mut loxie_compiler = CompilerMain::new(lexical_items, first_arg_str_view, source_text.as_str(), global_natives.peek_registry());
 
-    let ast_opt = parser.parse_file();
-
-    if ast_opt.0.is_none() {
-        eprintln!("Parsing failed, please see all errors above.");
-        return ExitCode::FAILURE;
-    }
-
-    let ast_decls = ast_opt.0.unwrap();
-
-    let mut analyzer = analyzer::Analyzer::new(source_text.as_str());
-
-    if !analyzer.check_source_unit(&ast_decls) {
-        eprintln!("Semantic checks failed, please see errors above.");
-        return ExitCode::FAILURE;
-    }
-
-    let mut ir_emitter = IREmitter::new(source_text.as_str(), global_natives.peek_registry());
-    let ir_opt = ir_emitter.emit_bytecode_from(&ast_decls);
-
-    if ir_opt.is_none() {
-        return ExitCode::FAILURE;
-    }
-
-    let (cfg_list, mut constant_groups_list, main_id) = ir_opt.unwrap();
-
-    // TODO: add printing for Value constant region.
-    // for graph in &cfg_list {
-    //     print_cfg(graph);
-    // }
-
-    let mut bc_emitter = BytecodeEmitter::default();
-
-    let program_opt = bc_emitter.generate_bytecode(&cfg_list, &mut constant_groups_list, main_id);
+    let program_opt = loxie_compiler.compile_from_start();
 
     if program_opt.is_none() {
         eprintln!("Compilation failed, see errors above.");
@@ -145,8 +105,6 @@ fn main() -> ExitCode {
     }
 
     let program = program_opt.unwrap();
-
-    // disassemble_program(&program);
 
     let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
 

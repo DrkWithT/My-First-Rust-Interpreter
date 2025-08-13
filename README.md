@@ -13,8 +13,7 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - Built-in functions galore!
 
 ### Feature Roadmap
- - Add simple imports (especially for native function stubs) (**WIP**)
-   - Refactor compile stages into one driver! (**WIP**)
+ - Fix compiler driver.
  - Improve error diagnostics
  - Add optimization passes on IR
     - Instruction substitutions

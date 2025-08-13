@@ -1,0 +1,6 @@
+# stdio.loxie
+# For: console I/O
+
+foreign read_int(): int;
+
+foreign print_val(arg: any): bool;

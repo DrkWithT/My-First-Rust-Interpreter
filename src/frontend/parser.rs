@@ -8,11 +8,11 @@ use crate::compiler::driver::QueuedSource;
 use crate::token_from;
 
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
-pub type ParseResult = (Option<ASTDecls>, Vec<QueuedSource>);
+pub type ParseResult = (Option<ASTDecls>, VecDeque<QueuedSource>);
 
 pub struct Parser {
     tokenizer: Lexer,
-    next_sources: Vec<QueuedSource>,
+    next_sources: VecDeque<QueuedSource>,
     previous: Token,
     current: Token,
     source_id: i32,
@@ -24,7 +24,7 @@ impl Parser {
     pub fn new(tokenizer: Lexer) -> Self {
         Self {
             tokenizer,
-            next_sources: Vec::<QueuedSource>::new(),
+            next_sources: VecDeque::<QueuedSource>::new(),
             previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
             current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
             source_id: 0,
@@ -125,6 +125,7 @@ impl Parser {
             "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
             "int" => Box::new(PrimitiveInfo::new(PrimitiveTag::Integer)),
             "float" => Box::new(PrimitiveInfo::new(PrimitiveTag::Floating)),
+            "any" => Box::new(PrimitiveInfo::new(PrimitiveTag::Any)),
             _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown)),
         }
     }
@@ -532,7 +533,7 @@ impl Parser {
     fn parse_import(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_any();
 
-        let temp_target_token = self.current().clone();
+        let temp_target_token = *self.current();
         
         if !self.consume_of([TokenType::Semicolon]) {
             self.recover_and_report("Expected ';' here.");
@@ -540,7 +541,7 @@ impl Parser {
         }
 
         let temp_target_name = temp_target_token.to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
-        self.next_sources.push((String::from(temp_target_name), self.source_id));
+        self.next_sources.push_front((String::from(temp_target_name), self.source_id));
         self.source_id += 1;
 
         Some(Box::new(Import::new(temp_target_token)))
@@ -647,7 +648,7 @@ impl Parser {
             line_no: 0,
             col_no: 0
         };
-        self.previous = self.current.clone();
+        self.previous = *self.current();
 
         self.error_count = 0;
     }
@@ -667,14 +668,14 @@ impl Parser {
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
-        let mut temp_src_targets = Vec::<QueuedSource>::new();
+        let mut temp_src_targets = VecDeque::<QueuedSource>::new();
 
         std::mem::swap(&mut temp_src_targets, &mut self.next_sources);
 
         if self.error_count == 0 {
             (Some(all_top_stmts), temp_src_targets)
         } else {
-            (None, vec![])
+            (None, VecDeque::<QueuedSource>::default())
         }
     }
 }

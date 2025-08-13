@@ -2,6 +2,7 @@
 #[derive(Clone, Copy, PartialEq)]
 pub enum PrimitiveTag {
     Unknown,
+    Any,
     Boolean,
     Integer,
     Floating
@@ -127,10 +128,11 @@ impl TypeKind for PrimitiveInfo {
         let temp_tag = self.tag;
 
         match temp_tag {
+            PrimitiveTag::Any => String::from("any"),
             PrimitiveTag::Boolean => String::from("bool"),
             PrimitiveTag::Integer => String::from("int"),
             PrimitiveTag::Floating => String::from("float"),
-            _ => String::from("any")
+            _ => String::from("unknown"),
         }
     }
 }

@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
-use crate::frontend::parser::ASTDecls;
 use crate::frontend::token::*;
 use crate::frontend::ast::*;
 use crate::semantics::scope::*;
 use crate::semantics::types::OperatorTag;
 use crate::semantics::types::ValueCategoryTag;
+use crate::compiler::driver::FullProgramAST;
 
 const BOOLEAN_TYPE_ID_N: i32 = 0;
 const INTEGER_TYPE_ID_N: i32 = 1;
 const FLOATING_TYPE_ID_N: i32 = 2;
+const ANY_TYPE_ID_N: i32 = 3;
 
 #[repr(i8)]
 #[derive(Clone, Copy, PartialEq)]
@@ -67,9 +68,10 @@ pub struct Analyzer<'al1> {
 impl<'al2> Analyzer<'al2> {
     pub fn new(source_view: &'al2 str) -> Self {
         let mut temp_type_table = HashMap::<i32, String>::new();
-        temp_type_table.insert(0, String::from("bool"));
-        temp_type_table.insert(1, String::from("int"));
-        temp_type_table.insert(2, String::from("float"));
+        temp_type_table.insert(ANY_TYPE_ID_N, String::from("any"));
+        temp_type_table.insert(BOOLEAN_TYPE_ID_N, String::from("bool"));
+        temp_type_table.insert(INTEGER_TYPE_ID_N, String::from("int"));
+        temp_type_table.insert(FLOATING_TYPE_ID_N, String::from("float"));
 
         Self {
             type_table: temp_type_table,
@@ -133,7 +135,7 @@ impl<'al2> Analyzer<'al2> {
         eprintln!("SemaError at [Ln {}, Col {}]:\nCulprit token: '{}'\n{}", culprit.line_no, culprit.col_no, culprit.to_lexeme_str(self.source_str).unwrap_or("..."), msg);
     }
 
-    pub fn check_source_unit(&mut self, ast: &ASTDecls) -> bool {
+    pub fn check_source_unit(&mut self, ast: &FullProgramAST) -> bool {
         for fun_declaration in ast {
             if !fun_declaration.accept_visitor(self) {
                 return false;
@@ -205,7 +207,9 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
 
             match temp_arg_type_id {
                 SemanticNote::DataValue(argv_type_id, _) => {
-                    if *callable_info.0.get(arg_it as usize).unwrap() != argv_type_id {
+                    let expected_type_id = *callable_info.0.get(arg_it as usize).unwrap();
+
+                    if expected_type_id != ANY_TYPE_ID_N && expected_type_id != argv_type_id {
                         let mismatch_err_msg = format!("For argument #{arg_it}, a mismatched type was found. Please check the declaration of 'fun {callee_lexeme}'.");
 
                         self.report_culprit_error(&callee_token, mismatch_err_msg.as_str());

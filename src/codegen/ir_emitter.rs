@@ -381,6 +381,11 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
 
 impl StmtVisitor<bool> for IREmitter<'_> {
     #[allow(unused_variables)]
+    fn visit_import(&mut self, s: &Import) -> bool {
+        true
+    }
+
+    #[allow(unused_variables)]
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
         true
     }

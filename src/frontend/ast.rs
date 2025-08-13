@@ -231,6 +231,7 @@ impl Expr for Binary {
 }
 
 pub trait StmtVisitor<Res> {
+    fn visit_import(&mut self, s: &Import) -> Res;
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> Res;
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;
@@ -246,6 +247,40 @@ pub trait Stmt {
     fn is_declaration(&self) -> bool;
     fn is_expr_stmt(&self) -> bool;
     fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool;
+}
+
+pub struct Import {
+    target_name: Token,
+}
+
+impl Import {
+    pub fn new(target_arg: Token) -> Self {
+        Self {
+            target_name: target_arg
+        }
+    }
+
+    pub fn get_target(&self) -> &Token {
+        &self.target_name
+    }
+}
+
+impl Stmt for Import {
+    fn is_directive(&self) -> bool {
+        true
+    }
+
+    fn is_declaration(&self) -> bool {
+        false
+    }
+    
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+    
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_import(self)
+    }
 }
 
 pub struct ForeignStub {
@@ -271,8 +306,8 @@ impl ForeignStub {
         &self.params
     }
 
-    pub fn get_result_type(&self) -> &Box<dyn types::TypeKind> {
-        &self.result_typing
+    pub fn get_result_type(&self) -> &dyn types::TypeKind {
+        self.result_typing.as_ref()
     }
 }
 

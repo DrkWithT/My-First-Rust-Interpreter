@@ -85,6 +85,18 @@ impl<'al2> Analyzer<'al2> {
         }
     }
 
+    pub fn reset_with(&mut self, source_view_next: &'al2 str) {
+        self.temp_token = Token {
+            tag: TokenType::Unknown,
+            start: 0,
+            length: 1,
+            line_no: 0,
+            col_no: 0
+        };
+        self.scopes.reset();
+        self.source_str = source_view_next;
+    }
+
     fn record_type(&mut self, type_str: String) -> i32 {
         let next_type_id = self.type_table.len() as i32;
 
@@ -294,6 +306,11 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
 }
 
 impl StmtVisitor<bool> for Analyzer<'_> {
+    #[allow(unused_variables)]
+    fn visit_import(&mut self, s: &Import) -> bool {
+        true
+    }
+
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
         let stub_name = s.get_name_token().to_lexeme_str(self.source_str).unwrap_or("");
 

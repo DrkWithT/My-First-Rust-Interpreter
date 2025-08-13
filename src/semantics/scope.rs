@@ -93,6 +93,12 @@ impl Default for ScopeStack {
 }
 
 impl ScopeStack {
+    pub fn reset(&mut self) {
+        while self.scopes.len() >= 2 {
+            self.scopes.pop();
+        }
+    }
+
     pub fn enter_scope(&mut self, name: &str) {
         self.scopes.push(Scope::new(name));
     }

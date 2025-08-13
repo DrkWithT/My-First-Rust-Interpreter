@@ -1,16 +1,21 @@
+use std::collections::VecDeque;
+
 use crate::frontend::ast::*;
 use crate::frontend::lexer::Lexer;
 use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types::*;
+use crate::compiler::driver::QueuedSource;
 use crate::token_from;
 
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
-pub type ParseResult = Option<ASTDecls>;
+pub type ParseResult = (Option<ASTDecls>, Vec<QueuedSource>);
 
 pub struct Parser {
     tokenizer: Lexer,
+    next_sources: Vec<QueuedSource>,
     previous: Token,
     current: Token,
+    source_id: i32,
     error_count: i32,
     parse_error_max: i32,
 }
@@ -19,8 +24,10 @@ impl Parser {
     pub fn new(tokenizer: Lexer) -> Self {
         Self {
             tokenizer,
+            next_sources: Vec::<QueuedSource>::new(),
             previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
             current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
+            source_id: 0,
             error_count: 0,
             parse_error_max: 5,
         }
@@ -76,7 +83,7 @@ impl Parser {
             culprit_lexeme_opt.expect("Unexpected invalid lexeme, out of source bound!");
 
         println!(
-            "Syntax error no. {}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
+            "Syntax error #{}:\nCulprit: '{}' at [{}:{}]\nReason: {}",
             self.error_count, culprit_lexeme, culprit_line, culprit_col, msg
         );
 
@@ -522,6 +529,23 @@ impl Parser {
         Some(Box::new(Block::new(items)))
     }
 
+    fn parse_import(&mut self) -> Option<Box<dyn Stmt>> {
+        self.consume_any();
+
+        let temp_target_token = self.current().clone();
+        
+        if !self.consume_of([TokenType::Semicolon]) {
+            self.recover_and_report("Expected ';' here.");
+            return None;
+        }
+
+        let temp_target_name = temp_target_token.to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+        self.next_sources.push((String::from(temp_target_name), self.source_id));
+        self.source_id += 1;
+
+        Some(Box::new(Import::new(temp_target_token)))
+    }
+
     fn parse_foreign_stub(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_any();
 
@@ -605,10 +629,27 @@ impl Parser {
         let start_word = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
 
         match start_word {
+            "import" => self.parse_import(),
             "foreign" => self.parse_foreign_stub(),
             "fun" => self.parse_function_decl(),
             _ => None
         }
+    }
+
+    pub fn reset_with(&mut self, next_source: String) {
+        self.tokenizer.reset_with(next_source);
+        self.next_sources.clear();
+
+        self.current = Token {
+            tag: TokenType::Unknown,
+            start: 0,
+            length: 1,
+            line_no: 0,
+            col_no: 0
+        };
+        self.previous = self.current.clone();
+
+        self.error_count = 0;
     }
 
     pub fn parse_file(&mut self) -> ParseResult {
@@ -619,15 +660,21 @@ impl Parser {
         while !self.at_eof() {
             let func_decl_opt = self.parse_top_decl();
 
-            func_decl_opt.as_ref()?;
+            if func_decl_opt.is_none() {
+                break;
+            }
 
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
+        let mut temp_src_targets = Vec::<QueuedSource>::new();
+
+        std::mem::swap(&mut temp_src_targets, &mut self.next_sources);
+
         if self.error_count == 0 {
-            Some(all_top_stmts)
+            (Some(all_top_stmts), temp_src_targets)
         } else {
-            None
+            (None, vec![])
         }
     }
 }

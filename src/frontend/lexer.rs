@@ -40,9 +40,16 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    /// NOTE: the `source_view` argument must view a source string that lives until the program ends... This is why it is static-lifetime marked.
     pub fn new(items: HashMap<String, TokenType>, source_view: &str, pos: usize, end: usize, line: usize, column: usize) -> Self {
         Self { items, source: source_view.to_string(), pos, end, line, column }
+    }
+
+    pub fn reset_with(&mut self, next_source: String) {
+        self.source = next_source;
+        self.pos = 0;
+        self.end = self.source.len();
+        self.line = 1;
+        self.column = 1;
     }
 
     pub fn view_source(&self) -> &str {

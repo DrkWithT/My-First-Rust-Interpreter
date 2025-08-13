@@ -5,9 +5,10 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
-pub mod codegen;
 pub mod frontend;
 pub mod semantics;
+pub mod codegen;
+pub mod compiler;
 pub mod utils;
 pub mod vm;
 
@@ -30,6 +31,8 @@ const CONCH_VERSION_PATCH: i32 = 0;
 const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
 
 fn main() -> ExitCode {
+    todo!("Refactor all main logic to use the compiler driver for multi-file programs.");
+
     let mut arg_list = env::args();
     let arg_count: usize = arg_list.len() - 1;
 
@@ -104,14 +107,14 @@ fn main() -> ExitCode {
 
     let ast_opt = parser.parse_file();
 
-    if ast_opt.is_none() {
+    if ast_opt.0.is_none() {
         eprintln!("Parsing failed, please see all errors above.");
         return ExitCode::FAILURE;
     }
 
-    let ast_decls = ast_opt.unwrap();
+    let ast_decls = ast_opt.0.unwrap();
 
-    let mut analyzer = analyzer::Analyzer::new(source_text.as_str(), global_natives.peek_registry());
+    let mut analyzer = analyzer::Analyzer::new(source_text.as_str());
 
     if !analyzer.check_source_unit(&ast_decls) {
         eprintln!("Semantic checks failed, please see errors above.");

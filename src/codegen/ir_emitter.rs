@@ -51,6 +51,16 @@ impl<'b> IREmitter<'b> {
         }
     }
 
+    pub fn reset_state(&mut self) {
+        self.fun_locals.clear();
+        self.result.clear();
+        self.proto_constants.clear();
+        self.proto_links.clear();
+        self.reset_relative_offset(-1);
+        self.skip_emit = false;
+        self.has_error = false;
+    }
+
     fn record_fun_by_name(&mut self, name: String, arity: i32) -> bool {
         if self.fun_locations.contains_key(name.as_str()) {
             return false;

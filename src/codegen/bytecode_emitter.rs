@@ -38,6 +38,12 @@ fn convert_ir_arg_tag(arg: Region) -> ArgMode {
 }
 
 impl BytecodeEmitter {
+    pub fn reset_state(&mut self) {
+        self.pending_node_ids.clear();
+        self.pending_patches.clear();
+        self.temp_instructions.clear();
+    }
+
     fn get_last_instruction_pos(&self) -> i32 {
         self.temp_instructions.len() as i32 - 1
     }

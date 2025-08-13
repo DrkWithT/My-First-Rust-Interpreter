@@ -13,19 +13,16 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - Built-in functions galore!
 
 ### Feature Roadmap
- - Add foreign function stub support. (**WIP 1**)
- - Fix semantic analysis to recognize native funcs. (**WIP 2**)
- - Add simple imports
+ - Add simple imports (especially for native function stubs) (**WIP**)
+   - Refactor compile stages into one driver! (**WIP**)
+ - Improve error diagnostics
+ - Add optimization passes on IR
+    - Instruction substitutions
  - Support strings
+ - Improve syntax highlighting on Loxie's local VSCode extension
  - Support arrays
  - Support lambdas
  - Add more standard I/O native functions!
-
-### Side Roadmap
- - Improve error diagnostics (**WIP 3**)
- - Improve syntax highlighting on Loxie's local VSCode extension
- - Add optimization passes on IR
-    - Instruction substitutions
 
 ### Other Docs
  - [Grammar Info](./docs/Grammar.md)

@@ -26,6 +26,7 @@
 <assign> ::= <access> ("=" <compare>)?
 
 ; statements
+
 <variable-decl> ::= "let" <identifier> ":" <typename> "=" <compare> ";"
 <if> ::= "if" <compare> <block> (<else>)?
 <else> ::= "else" <block>
@@ -34,8 +35,10 @@
 <expr-stmt> ::= <assign> ";"
 <nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt> | <while>
 <block> ::= { <nestable>* }
-<function-decl> ::= "fun" <identifier> <params> : <typename> <block>
+<native-decl> ::= "foreign" <identifier> <params> ":" <typename> ";"
+<function-decl> ::= "fun" <identifier> <params> ":" <typename> <block>
+<decl> ::= <native-decl> | <function-decl>
 <params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
 <param-decl> ::= <identifier> ":" <typename>
-<program> ::= <function-decl>*
+<program> ::= <decl>*
 ```

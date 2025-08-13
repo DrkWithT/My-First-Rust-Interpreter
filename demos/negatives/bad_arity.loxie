@@ -1,0 +1,9 @@
+fun foo(a: int, b: int): int {
+    return a + b;
+}
+
+fun main(): int {
+    let bar: int = foo(10, 20, 30);
+
+    return 0;
+}

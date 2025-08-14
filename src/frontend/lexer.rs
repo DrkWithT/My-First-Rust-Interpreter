@@ -30,21 +30,26 @@ pub mod matchers {
     }
 }
 
-pub struct Lexer {
-    items: HashMap<String, TokenType>,
-    source: String,
+pub struct Lexer<'ll_1> {
+    source: &'ll_1 str,
     pos: usize,
     end: usize,
     line: usize,
     column: usize
 }
 
-impl Lexer {
-    pub fn new(items: HashMap<String, TokenType>, source_view: &str, pos: usize, end: usize, line: usize, column: usize) -> Self {
-        Self { items, source: source_view.to_string(), pos, end, line, column }
+impl<'ll_2> Lexer<'ll_2> {
+    pub fn new(source_view: &'ll_2 str) -> Self {
+        Self {
+            source: source_view,
+            pos: 0,
+            end: source_view.len(),
+            line: 1,
+            column: 1,
+        }
     }
 
-    pub fn reset_with(&mut self, next_source: String) {
+    pub fn reset_with(&mut self, next_source: &'ll_2 str) {
         self.source = next_source;
         self.pos = 0;
         self.end = self.source.len();
@@ -53,7 +58,7 @@ impl Lexer {
     }
 
     pub fn view_source(&self) -> &str {
-        self.source.as_str()
+        self.source
     }
     
     fn at_end(&self) -> bool {
@@ -68,12 +73,8 @@ impl Lexer {
         }
 
         let symbol_expect_msg = format!("Could not peek symbol at {raw_src_pos}");
-
-        self.source
-            .as_str()
-            .chars()
-            .nth(raw_src_pos)
-            .expect(&symbol_expect_msg)
+        
+        self.source.chars().nth(raw_src_pos).expect(&symbol_expect_msg)
     }
 
     fn update_source_location(&mut self, c: char) {
@@ -144,7 +145,7 @@ impl Lexer {
         token_from!(TokenType::Comment, temp_start, temp_len, temp_line, temp_column)
     }
 
-    fn lex_word(&mut self) -> Token {
+    fn lex_word(&mut self, items: &'ll_2 HashMap<String, TokenType>) -> Token {
         let temp_start = self.pos;
         let mut temp_len: usize = 0;
         let temp_line = self.line;
@@ -163,12 +164,12 @@ impl Lexer {
         }
 
         let result: Token = token_from!(TokenType::Unknown, temp_start, temp_len, temp_line, temp_column);
-        let source_view = self.source.as_str();
+        let source_view = self.source;
 
         let result_lexeme = result.to_lexeme_str(source_view).or(Some("")).expect("Lexer::lex_word panicked while getting lexeme");
 
         token_from!(
-            *self.items.get(result_lexeme).or(
+            *items.get(result_lexeme).or(
                 Some(&TokenType::Identifier)
             ).expect("Lexer::lex_word panicked while deducing lexical tag"),
             temp_start,
@@ -208,7 +209,7 @@ impl Lexer {
         }
     }
 
-    fn lex_operator(&mut self) -> Token {
+    fn lex_operator(&mut self, items: &'ll_2 HashMap<String, TokenType>) -> Token {
         let temp_start = self.pos;
         let mut temp_len: usize = 0;
         let temp_line = self.line;
@@ -227,12 +228,12 @@ impl Lexer {
         }
 
         let result: Token = token_from!(TokenType::Unknown, temp_start, temp_len, temp_line, temp_column);
-        let source_view = self.source.as_str();
+        let source_view = self.source;
 
         let result_lexeme = result.to_lexeme_str(source_view).or(Some("")).expect("Lexer::lex_operator panicked while getting lexeme");
 
         token_from!(
-            *self.items.get(result_lexeme).or(
+            *items.get(result_lexeme).or(
                 Some(&TokenType::Unknown)
             ).expect("Lexer::lex_operator panicked while deducing lexical tag"),
             temp_start,
@@ -242,21 +243,21 @@ impl Lexer {
         )
     }
 
-    fn lex_complex(&mut self, c: char) -> Token {
+    fn lex_complex(&mut self, c: char, items: &'ll_2 HashMap<String, TokenType>) -> Token {
         if matchers::check_spaces(c) {
             self.lex_spaces()
         } else if matchers::check_alpha(c) {
-            self.lex_word()
+            self.lex_word(items)
         } else if matchers::check_numeric(c) {
             self.lex_numbers()
         } else if matchers::check_multi(c, ['.', '+', '-', '*', '/', '!', '=', '<', '>']) {
-            self.lex_operator()
+            self.lex_operator(items)
         } else {
             self.lex_single(TokenType::Unknown)
         }
     }
 
-    pub fn lex_next(&mut self) -> Token {
+    pub fn lex_next(&mut self, items: &'ll_2 HashMap<String, TokenType>) -> Token {
         if self.at_end() {
             return token_from!(
                 TokenType::Eof,
@@ -280,7 +281,7 @@ impl Lexer {
             '}' => self.lex_single(TokenType::BraceClose),
             '[' => self.lex_single(TokenType::BracketOpen),
             ']' => self.lex_single(TokenType::BracketClose),
-            _ => self.lex_complex(next_symbol)
+            _ => self.lex_complex(next_symbol, items)
         }
     }
 }

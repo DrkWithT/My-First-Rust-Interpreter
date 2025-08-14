@@ -95,9 +95,9 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from(">"), TokenType::OpGreaterThan);
     lexical_items.insert(String::from("="), TokenType::OpAssign);
 
-    let mut loxie_compiler = CompilerMain::new(lexical_items, first_arg_str_view, source_text.as_str(), global_natives.peek_registry());
+    let mut loxie_compiler = CompilerMain::new(first_arg_str_view, source_text.as_str(), global_natives.peek_registry());
 
-    let program_opt = loxie_compiler.compile_from_start();
+    let program_opt = loxie_compiler.compile_from_start(lexical_items);
 
     if program_opt.is_none() {
         eprintln!("Compilation failed, see errors above.");

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use crate::frontend::ast::*;
 use crate::frontend::lexer::Lexer;
@@ -10,8 +10,8 @@ use crate::token_from;
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
 pub type ParseResult = (Option<ASTDecls>, VecDeque<QueuedSource>);
 
-pub struct Parser {
-    tokenizer: Lexer,
+pub struct Parser<'pl_1> {
+    tokenizer: Lexer<'pl_1>,
     next_sources: VecDeque<QueuedSource>,
     previous: Token,
     current: Token,
@@ -20,8 +20,8 @@ pub struct Parser {
     parse_error_max: i32,
 }
 
-impl Parser {
-    pub fn new(tokenizer: Lexer) -> Self {
+impl<'pl_2> Parser<'pl_2> {
+    pub fn new(tokenizer: Lexer<'pl_2>) -> Self {
         Self {
             tokenizer,
             next_sources: VecDeque::<QueuedSource>::new(),
@@ -45,9 +45,8 @@ impl Parser {
         self.current().tag == TokenType::Eof
     }
 
-    fn advance(&mut self) -> Token {
-        loop {
-            let temp = self.tokenizer.lex_next();
+    fn advance(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Token {        loop {
+            let temp = self.tokenizer.lex_next(items);
 
             let temp_tag = temp.tag;
 
@@ -66,7 +65,7 @@ impl Parser {
         picks.contains(&self.current().tag)
     }
 
-    fn recover_and_report(&mut self, msg: &str) {
+    fn recover_and_report(&mut self, msg: &str, items: &'pl_2 HashMap<String, TokenType>) {
         if self.error_count > self.parse_error_max {
             return;
         }
@@ -94,28 +93,28 @@ impl Parser {
                 break;
             }
 
-            self.consume_any();
+            self.consume_any(items);
         }
     }
 
-    fn consume_any(&mut self) {
+    fn consume_any(&mut self, items: &'pl_2 HashMap<String, TokenType>) {
         self.previous = self.current;
-        self.current = self.advance();
+        self.current = self.advance(items);
     }
 
-    fn consume_of<const N: usize>(&mut self, picks: [TokenType; N]) -> bool {
+    fn consume_of<const N: usize>(&mut self, picks: [TokenType; N], items: &'pl_2 HashMap<String, TokenType>) -> bool {
         if self.match_here(picks) {
-            self.consume_any();
+            self.consume_any(items);
             return true;
         }
 
-        self.recover_and_report("Unexpected token!");
+        self.recover_and_report("Unexpected token!", items);
 
         false
     }
 
-    fn parse_type(&mut self) -> Box<dyn TypeKind> {
-        self.consume_any();
+    fn parse_type(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Box<dyn TypeKind> {
+        self.consume_any(items);
         let typename_lexeme = self
             .previous()
             .to_lexeme_str(self.tokenizer.view_source())
@@ -130,11 +129,11 @@ impl Parser {
         }
     }
 
-    fn parse_primitive(&mut self) -> Option<Box<dyn Expr>> {
+    fn parse_primitive(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if self.match_here([TokenType::ParenOpen]) {
-            self.consume_any();
-            let parenthesized_expr = self.parse_compare();
-            self.consume_of([TokenType::ParenClose]);
+            self.consume_any(items);
+            let parenthesized_expr = self.parse_compare(items);
+            self.consume_of([TokenType::ParenClose], items);
 
             return parenthesized_expr;
         }
@@ -146,15 +145,15 @@ impl Parser {
             TokenType::LiteralInt,
             TokenType::LiteralFloat,
             TokenType::Identifier,
-        ]) {
+        ], items) {
             return None;
         }
 
         Some(Box::new(Primitive::new(token_copy)))
     }
 
-    fn parse_access(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_primitive();
+    fn parse_access(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_primitive(items);
 
         lhs_opt.as_ref()?;
 
@@ -165,9 +164,9 @@ impl Parser {
                 break;
             }
 
-            self.consume_any();
+            self.consume_any(items);
 
-            let rhs_box = self.parse_primitive();
+            let rhs_box = self.parse_primitive(items);
 
             rhs_box.as_ref()?;
 
@@ -179,8 +178,8 @@ impl Parser {
         Some(lhs)
     }
 
-    fn parse_call(&mut self) -> Option<Box<dyn Expr>> {
-        let callee_opt = self.parse_access();
+    fn parse_call(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let callee_opt = self.parse_access(items);
 
         callee_opt.as_ref()?;
 
@@ -190,16 +189,16 @@ impl Parser {
             return Some(callee_expr);
         }
 
-        self.consume_any();
+        self.consume_any(items);
 
         let mut calling_args = Vec::<Box<dyn Expr>>::new();
 
         if self.match_here([TokenType::ParenClose]) {
-            self.consume_any();
+            self.consume_any(items);
             return Some(Box::new(Call::new(callee_expr, calling_args)));
         }
 
-        let first_arg_opt = self.parse_compare();
+        let first_arg_opt = self.parse_compare(items);
 
         first_arg_opt.as_ref()?;
 
@@ -207,13 +206,13 @@ impl Parser {
 
         while !self.at_eof() {
             if self.match_here([TokenType::ParenClose]) {
-                self.consume_any();
+                self.consume_any(items);
                 break;
             }
 
-            self.consume_of([TokenType::Comma]);
+            self.consume_of([TokenType::Comma], items);
 
-            let next_arg_opt = self.parse_compare();
+            let next_arg_opt = self.parse_compare(items);
 
             next_arg_opt.as_ref()?;
 
@@ -223,9 +222,9 @@ impl Parser {
         Some(Box::new(Call::new(callee_expr, calling_args)))
     }
 
-    fn parse_unary(&mut self) -> Option<Box<dyn Expr>> {
+    fn parse_unary(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if !self.match_here([TokenType::OpMinus]) {
-            return self.parse_call();
+            return self.parse_call(items);
         }
 
         let current_tag = self.current().tag;
@@ -234,17 +233,17 @@ impl Parser {
             _ => OperatorTag::Noop,
         };
 
-        self.consume_any();
+        self.consume_any(items);
 
-        let temp_inner_opt = self.parse_call();
+        let temp_inner_opt = self.parse_call(items);
 
         temp_inner_opt.as_ref()?;
 
         Some(Box::new(Unary::new(temp_inner_opt.unwrap(), prefixed_op)))
     }
 
-    fn parse_factor(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_unary();
+    fn parse_factor(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_unary(items);
 
         lhs_opt.as_ref()?;
 
@@ -263,9 +262,9 @@ impl Parser {
                 OperatorTag::Slash
             };
 
-            self.consume_any();
+            self.consume_any(items);
 
-            let rhs_opt = self.parse_unary();
+            let rhs_opt = self.parse_unary(items);
 
             rhs_opt.as_ref()?;
 
@@ -275,8 +274,8 @@ impl Parser {
         Some(lhs)
     }
 
-    fn parse_term(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor();
+    fn parse_term(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor(items);
 
         lhs_opt.as_ref()?;
 
@@ -295,9 +294,9 @@ impl Parser {
                 OperatorTag::Minus
             };
 
-            self.consume_any();
+            self.consume_any(items);
 
-            let rhs_opt = self.parse_factor();
+            let rhs_opt = self.parse_factor(items);
 
             rhs_opt.as_ref()?;
 
@@ -307,8 +306,8 @@ impl Parser {
         Some(lhs)
     }
 
-    fn parse_equality(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_term();
+    fn parse_equality(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_term(items);
 
         lhs_opt.as_ref()?;
 
@@ -327,9 +326,9 @@ impl Parser {
                 OperatorTag::Inequality
             };
 
-            self.consume_any();
+            self.consume_any(items);
 
-            let rhs_opt = self.parse_term();
+            let rhs_opt = self.parse_term(items);
 
             rhs_opt.as_ref()?;
 
@@ -339,8 +338,8 @@ impl Parser {
         Some(lhs)
     }
 
-    fn parse_compare(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality();
+    fn parse_compare(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality(items);
 
         lhs_opt.as_ref()?;
 
@@ -359,9 +358,9 @@ impl Parser {
                 OperatorTag::GreaterThan
             };
 
-            self.consume_any();
+            self.consume_any(items);
 
-            let rhs_opt = self.parse_equality();
+            let rhs_opt = self.parse_equality(items);
 
             rhs_opt.as_ref()?;
 
@@ -371,8 +370,8 @@ impl Parser {
         Some(lhs)
     }
 
-    fn parse_assign(&mut self) -> Option<Box<dyn Expr>> {
-        let lhs_opt = self.parse_access();
+    fn parse_assign(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        let lhs_opt = self.parse_access(items);
 
         lhs_opt.as_ref()?;
 
@@ -380,9 +379,9 @@ impl Parser {
             return Some(lhs_opt.unwrap());
         }
 
-        self.consume_any();
+        self.consume_any(items);
 
-        let rhs_opt = self.parse_compare();
+        let rhs_opt = self.parse_compare(items);
 
         rhs_opt.as_ref()?;
 
@@ -393,26 +392,26 @@ impl Parser {
         )))
     }
 
-    fn parse_variable_decl(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_of([TokenType::Keyword]);
+    fn parse_variable_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
 
         let var_name = *self.current();
 
-        self.consume_of([TokenType::Identifier]);
-        self.consume_of([TokenType::Colon]);
+        self.consume_of([TokenType::Identifier], items);
+        self.consume_of([TokenType::Colon], items);
 
-        let var_type_box = self.parse_type();
+        let var_type_box = self.parse_type(items);
 
-        self.consume_of([TokenType::OpAssign]);
+        self.consume_of([TokenType::OpAssign], items);
 
-        let var_init_expr_opt = self.parse_compare();
+        let var_init_expr_opt = self.parse_compare(items);
 
         var_init_expr_opt.as_ref()?;
 
         let var_init_expr = var_init_expr_opt.unwrap();
 
-        if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' .");
+        if !self.consume_of([TokenType::Semicolon], items) {
+            self.recover_and_report("Expected ';' .", items);
             return None;
         }
 
@@ -423,16 +422,16 @@ impl Parser {
         )))
     }
 
-    fn parse_if(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_any();
+    fn parse_if(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_any(items);
 
-        let conds_opt = self.parse_compare();
+        let conds_opt = self.parse_compare(items);
 
         conds_opt.as_ref()?;
 
         let conds_expr = conds_opt.unwrap();
 
-        let truthy_body_opt = self.parse_block();
+        let truthy_body_opt = self.parse_block(items);
 
         truthy_body_opt.as_ref()?;
 
@@ -444,9 +443,9 @@ impl Parser {
             .expect("")
             == "else"
         {
-            self.consume_any();
+            self.consume_any(items);
 
-            let falsy_body_opt = self.parse_block();
+            let falsy_body_opt = self.parse_block(items);
 
             falsy_body_opt.as_ref()?;
 
@@ -462,12 +461,12 @@ impl Parser {
         Some(Box::new(If::new(truthy_body, dud_falsy_body, conds_expr)))
     }
 
-    fn parse_while(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_any();
+    fn parse_while(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_any(items);
 
-        let check_expr = self.parse_compare();
+        let check_expr = self.parse_compare(items);
 
-        let body_stmt = self.parse_block();
+        let body_stmt = self.parse_block(items);
 
         Some(Box::new(While::new(
             check_expr.unwrap(),
@@ -475,78 +474,78 @@ impl Parser {
         )))
     }
 
-    fn parse_return(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_any();
+    fn parse_return(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_any(items);
 
-        let result_expr_opt = self.parse_compare();
+        let result_expr_opt = self.parse_compare(items);
 
         result_expr_opt.as_ref()?;
 
-        if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' .");
+        if !self.consume_of([TokenType::Semicolon], items) {
+            self.recover_and_report("Expected ';' .", items);
             return None;
         }
 
         Some(Box::new(Return::new(result_expr_opt.unwrap())))
     }
 
-    fn parse_expr_stmt(&mut self) -> Option<Box<dyn Stmt>> {
-        let inner_expr_opt = self.parse_assign();
+    fn parse_expr_stmt(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        let inner_expr_opt = self.parse_assign(items);
 
         inner_expr_opt.as_ref()?;
 
-        if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' .");
+        if !self.consume_of([TokenType::Semicolon], items) {
+            self.recover_and_report("Expected ';' .", items);
             return None;
         }
 
         Some(Box::new(ExprStmt::new(inner_expr_opt.unwrap())))
     }
 
-    fn parse_nestable(&mut self) -> Option<Box<dyn Stmt>> {
+    fn parse_nestable(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
         let keyword = self
             .current()
             .to_lexeme_str(self.tokenizer.view_source())
             .expect("");
 
         match keyword {
-            "let" => self.parse_variable_decl(),
-            "if" => self.parse_if(),
-            "while" => self.parse_while(),
-            "return" => self.parse_return(),
-            _ => self.parse_expr_stmt(),
+            "let" => self.parse_variable_decl(items),
+            "if" => self.parse_if(items),
+            "while" => self.parse_while(items),
+            "return" => self.parse_return(items),
+            _ => self.parse_expr_stmt(items),
         }
     }
 
-    fn parse_block(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_of([TokenType::BraceOpen]);
+    fn parse_block(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::BraceOpen], items);
 
-        let mut items = Vec::<Box<dyn Stmt>>::new();
+        let mut stmts = Vec::<Box<dyn Stmt>>::new();
 
         while !self.at_eof() {
             if self.match_here([TokenType::BraceClose]) {
-                self.consume_any();
+                self.consume_any(items);
                 break;
             }
 
-            let next_stmt_opt = self.parse_nestable();
+            let next_stmt_opt = self.parse_nestable(items);
 
             next_stmt_opt.as_ref()?;
 
-            items.push(next_stmt_opt.unwrap());
+            stmts.push(next_stmt_opt.unwrap());
         }
 
-        Some(Box::new(Block::new(items)))
+        Some(Box::new(Block::new(stmts)))
     }
 
-    fn parse_import(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_any();
+    fn parse_import(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_any(items);
 
-        self.consume_of([TokenType::Identifier]);
+        self.consume_of([TokenType::Identifier], items);
         let temp_target_token = *self.previous();
 
-        if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' .");
+        if !self.consume_of([TokenType::Semicolon], items) {
+            self.recover_and_report("Expected ';' .", items);
             return None;
         }
 
@@ -557,19 +556,19 @@ impl Parser {
         Some(Box::new(Import::new(temp_target_token)))
     }
 
-    fn parse_foreign_stub(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_any();
+    fn parse_foreign_stub(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_any(items);
 
         let stub_name_token = *self.current();
-        self.consume_of([TokenType::Identifier]);
+        self.consume_of([TokenType::Identifier], items);
 
-        let stub_params = self.parse_function_params();
+        let stub_params = self.parse_function_params(items);
 
-        self.consume_of([TokenType::Colon]);
-        let stub_ret_type_box = self.parse_type();
+        self.consume_of([TokenType::Colon], items);
+        let stub_ret_type_box = self.parse_type(items);
 
-        if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' .");
+        if !self.consume_of([TokenType::Semicolon], items) {
+            self.recover_and_report("Expected ';' .", items);
             return None;
         }
 
@@ -580,18 +579,18 @@ impl Parser {
         )))
     }
 
-    fn parse_function_decl(&mut self) -> Option<Box<dyn Stmt>> {
-        self.consume_of([TokenType::Keyword]);
+    fn parse_function_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
 
         let func_name_token = *self.current();
-        self.consume_of([TokenType::Identifier]);
+        self.consume_of([TokenType::Identifier], items);
 
-        let func_params = self.parse_function_params();
+        let func_params = self.parse_function_params(items);
 
-        self.consume_of([TokenType::Colon]);
-        let func_type_box = self.parse_type();
+        self.consume_of([TokenType::Colon], items);
+        let func_type_box = self.parse_type(items);
 
-        let func_body_opt = self.parse_block();
+        let func_body_opt = self.parse_block(items);
 
         func_body_opt.as_ref()?;
 
@@ -603,54 +602,54 @@ impl Parser {
         )))
     }
 
-    fn parse_param_decl(&mut self) -> ParamDecl {
+    fn parse_param_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> ParamDecl {
         let name_token = *self.current();
-        self.consume_of([TokenType::Identifier]);
-        self.consume_of([TokenType::Colon]);
+        self.consume_of([TokenType::Identifier], items);
+        self.consume_of([TokenType::Colon], items);
 
-        let typing_box = self.parse_type();
+        let typing_box = self.parse_type(items);
 
         ParamDecl::new(name_token, typing_box)
     }
 
-    fn parse_function_params(&mut self) -> Vec<ParamDecl> {
-        self.consume_of([TokenType::ParenOpen]);
+    fn parse_function_params(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Vec<ParamDecl> {
+        self.consume_of([TokenType::ParenOpen], items);
 
         let mut parameters = Vec::<ParamDecl>::new();
 
         if self.match_here([TokenType::ParenClose]) {
-            self.consume_any();
+            self.consume_any(items);
             return parameters;
         }
 
-        parameters.push(self.parse_param_decl());
+        parameters.push(self.parse_param_decl(items));
 
         while !self.at_eof() {
             if self.match_here([TokenType::ParenClose]) {
-                self.consume_any();
+                self.consume_any(items);
                 break;
             }
 
-            self.consume_of([TokenType::Comma]);
+            self.consume_of([TokenType::Comma], items);
 
-            parameters.push(self.parse_param_decl());
+            parameters.push(self.parse_param_decl(items));
         }
 
         parameters
     }
 
-    fn parse_top_decl(&mut self) -> Option<Box<dyn Stmt>> {
+    fn parse_top_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
         let start_word = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
 
         match start_word {
-            "import" => self.parse_import(),
-            "foreign" => self.parse_foreign_stub(),
-            "fun" => self.parse_function_decl(),
+            "import" => self.parse_import(items),
+            "foreign" => self.parse_foreign_stub(items),
+            "fun" => self.parse_function_decl(items),
             _ => None
         }
     }
 
-    pub fn reset_with(&mut self, next_source: String) {
+    pub fn reset_with(&mut self, next_source: &'pl_2 str) {
         self.tokenizer.reset_with(next_source);
         self.next_sources.clear();
 
@@ -666,13 +665,13 @@ impl Parser {
         self.error_count = 0;
     }
 
-    pub fn parse_file(&mut self) -> ParseResult {
-        self.consume_any();
+    pub fn parse_file(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> ParseResult {
+        self.consume_any(items);
 
         let mut all_top_stmts = ASTDecls::new();
 
         while !self.at_eof() {
-            let func_decl_opt = self.parse_top_decl();
+            let func_decl_opt = self.parse_top_decl(items);
 
             if func_decl_opt.is_none() {
                 break;

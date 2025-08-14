@@ -24,6 +24,10 @@ pub type QueuedSource = (String, i32);
 /// Stores the combined declaration ASTs in DFS-like order for all sources reached in compilation.
 pub type FullProgramAST = VecDeque<Box<dyn Stmt>>;
 
+pub type SourceIndexedAST = (i32, Box<dyn Stmt>);
+
+pub type FullProgramASTSourced = (VecDeque<SourceIndexedAST>, HashMap<i32, String>);
+
 /**
  ### BRIEF
  This logical entity contains all major stages of the bytecode compiler:
@@ -38,9 +42,10 @@ pub type FullProgramAST = VecDeque<Box<dyn Stmt>>;
  */
 pub struct CompilerMain<'cml_1> {
     parser: Parser,
-    semanator: Analyzer<'cml_1>,
+    semanator: Analyzer,
     ir_emitter: IREmitter<'cml_1>,
     bc_emitter: BytecodeEmitter,
+    temp_tu_src: String,
     first_source_name: &'cml_1 str,
 }
 
@@ -51,40 +56,56 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         Self {
            parser: temp_parser,
-           semanator: Analyzer::<'cml_2>::new(main_source),
+           semanator: Analyzer::new(String::from(main_source)),
            ir_emitter: IREmitter::<'cml_2>::new(main_source, native_catalog),
            bc_emitter: BytecodeEmitter::default(),
+           temp_tu_src: String::new(),
            first_source_name: first_source_name_arg,
         }
     }
 
-    fn step_parse(&mut self) -> Option<FullProgramAST> {
+    fn step_parse(&mut self) -> Option<FullProgramASTSourced> {
         let mut source_frontier = VecDeque::<QueuedSource>::new();
         source_frontier.push_back((String::from(self.first_source_name), 0));
 
-        let mut temp_full_ast = FullProgramAST::new();
+        let mut full_sourced_ast_seq = VecDeque::<SourceIndexedAST>::new();
+        let mut recorded_srcs = HashMap::<i32, String>::new();
         let mut finished_srcs = HashSet::<String>::new();
 
         while !source_frontier.is_empty() {
-            let (next_src_name, _) = source_frontier.pop_back().unwrap();
+            let (next_src_name, src_tu_id) = source_frontier.pop_back().unwrap();
 
-            let temp_tu_src = fs::read_to_string(format!("./loxie_lib/{next_src_name}.loxie"));
+            let temp_tu_src_opt = if next_src_name.starts_with("./") {
+                fs::read_to_string(next_src_name.clone())
+            } else {
+                fs::read_to_string(format!("./loxie_lib/{next_src_name}.loxie"))
+            };
 
-            if temp_tu_src.is_err() {
+            if temp_tu_src_opt.is_err() {
                 eprintln!("CompileError: Failed to read file of import '{}'", next_src_name.as_str());
                 return None;
             }
 
-            self.parser.reset_with(temp_tu_src.unwrap());
+            self.temp_tu_src = temp_tu_src_opt.unwrap();
+
+            self.parser.reset_with(self.temp_tu_src.clone());
             let (tu_ast_opt, tu_successors) = self.parser.parse_file();
 
             tu_ast_opt.as_deref()?;
 
-            let tu_ast = tu_ast_opt.unwrap();
-            for fun_ast in tu_ast {
-                temp_full_ast.push_front(fun_ast);
+            // NOTE: Why do I reverse each TU's decls? For each TU, push top declarations in a certain order to ensure proper semantic scan ordering:
+            // TU Main: | D Main | -- (imports) --> TU 1: | A B C | 
+            // --> A, B, C, D, Main
+            let mut temp_tu_ast = tu_ast_opt.unwrap();
+            temp_tu_ast.reverse();
+
+            for fun_ast in temp_tu_ast {
+                full_sourced_ast_seq.push_front(
+                    (src_tu_id, fun_ast)
+                );
             }
 
+            recorded_srcs.insert(src_tu_id, self.temp_tu_src.clone());
             finished_srcs.insert(next_src_name);
 
             for successor_src in tu_successors {
@@ -94,14 +115,21 @@ impl<'cml_2> CompilerMain<'cml_2> {
             }
         }
 
-        Some(temp_full_ast)
+        Some((full_sourced_ast_seq, recorded_srcs))
     }
 
-    fn step_sema(&mut self, full_ast: &FullProgramAST) -> bool {
-        self.semanator.check_source_unit(full_ast)
+    fn step_sema(&mut self, full_ast: &VecDeque<SourceIndexedAST>, srcs_table: &HashMap<i32, String>) -> bool {
+        for (temp_ast_src_idx, temp_ast) in full_ast {
+            self.semanator.reset_source(srcs_table.get(temp_ast_src_idx).unwrap().clone());
+            if !self.semanator.check_fun_ast(temp_ast.as_ref()) {
+                return false;
+            }
+        }
+
+        true
     }
 
-    fn step_ir_emit(&mut self, full_ast: &FullProgramAST) -> Option<IRResult> {
+    fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
         self.ir_emitter.emit_all_ir(full_ast)
     }
 
@@ -116,13 +144,13 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         full_program_ast_opt.as_ref()?;
 
-        let full_program_ast = full_program_ast_opt.unwrap();
+        let (full_asts, full_src_table) = full_program_ast_opt.unwrap();
 
-        if !self.step_sema(&full_program_ast) {
+        if !self.step_sema(&full_asts, &full_src_table) {
             return None;
         }
 
-        let full_program_ir_opt = self.step_ir_emit(&full_program_ast);
+        let full_program_ir_opt = self.step_ir_emit(&full_asts);
 
         full_program_ir_opt.as_ref()?;
 

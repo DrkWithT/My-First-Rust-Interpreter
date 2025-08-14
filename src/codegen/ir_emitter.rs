@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use crate::codegen::ir::*;
 use crate::frontend::ast::*;
 // use crate::frontend::parser::ASTDecls;
 use crate::frontend::token::*;
 use crate::semantics::types::OperatorTag;
-use crate::compiler::driver::FullProgramAST;
+use crate::compiler::driver::SourceIndexedAST;
 use crate::utils::bundle::NativeBrief;
 use crate::vm::value::Value;
 
@@ -168,8 +169,8 @@ impl<'b> IREmitter<'b> {
         self.result.last_mut().unwrap().add_instruction_recent(step);
     }
 
-    pub fn emit_all_ir(&mut self, ast_tops: &FullProgramAST) -> Option<IRResult> {
-        for temp in ast_tops {
+    pub fn emit_all_ir(&mut self, ast_tops: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
+        for (_, temp) in ast_tops {
             if !temp.accept_visitor(self) {
                 eprintln!("Oops: failed to generate function from declaration");
                 return None;

@@ -5,7 +5,6 @@ use crate::frontend::ast::*;
 use crate::semantics::scope::*;
 use crate::semantics::types::OperatorTag;
 use crate::semantics::types::ValueCategoryTag;
-use crate::compiler::driver::FullProgramAST;
 
 const BOOLEAN_TYPE_ID_N: i32 = 0;
 const INTEGER_TYPE_ID_N: i32 = 1;
@@ -58,15 +57,15 @@ fn check_assignment_value_groups(lhs_info: &SemanticNote, rhs_info: &SemanticNot
  # CAVEATS
  No support for arrays or strings exists yet.
  */
-pub struct Analyzer<'al1> {
+pub struct Analyzer {
     type_table: HashMap<i32, String>,
     temp_token: Token,
     scopes: ScopeStack,
-    source_str: &'al1 str,
+    source_str: String,
 }
 
-impl<'al2> Analyzer<'al2> {
-    pub fn new(source_view: &'al2 str) -> Self {
+impl Analyzer {
+    pub fn new(source_view: String) -> Self {
         let mut temp_type_table = HashMap::<i32, String>::new();
         temp_type_table.insert(ANY_TYPE_ID_N, String::from("any"));
         temp_type_table.insert(BOOLEAN_TYPE_ID_N, String::from("bool"));
@@ -87,7 +86,11 @@ impl<'al2> Analyzer<'al2> {
         }
     }
 
-    pub fn reset_with(&mut self, source_view_next: &'al2 str) {
+    pub fn reset_source(&mut self, source_view_next: String) {
+        self.source_str = source_view_next;
+    }
+
+    pub fn reset_with(&mut self) {
         self.temp_token = Token {
             tag: TokenType::Unknown,
             start: 0,
@@ -95,8 +98,7 @@ impl<'al2> Analyzer<'al2> {
             line_no: 0,
             col_no: 0
         };
-        self.scopes.reset();
-        self.source_str = source_view_next;
+        // self.scopes.reset();
     }
 
     fn record_type(&mut self, type_str: String) -> i32 {
@@ -132,23 +134,18 @@ impl<'al2> Analyzer<'al2> {
     }
 
     fn report_culprit_error(&self, culprit: &Token, msg: &str) {
-        eprintln!("SemaError at [Ln {}, Col {}]:\nCulprit token: '{}'\n{}", culprit.line_no, culprit.col_no, culprit.to_lexeme_str(self.source_str).unwrap_or("..."), msg);
+        eprintln!("SemaError at [Ln {}, Col {}]:\nCulprit token: '{}'\n{}", culprit.line_no, culprit.col_no, culprit.to_lexeme_str(self.source_str.as_str()).unwrap_or("..."), msg);
     }
 
-    pub fn check_source_unit(&mut self, ast: &FullProgramAST) -> bool {
-        for fun_declaration in ast {
-            if !fun_declaration.accept_visitor(self) {
-                return false;
-            }
-        }
-
-        true
+    pub fn check_fun_ast(&mut self, func_ast: &dyn Stmt) -> bool {
+        func_ast.accept_visitor(self)
     }
 }
 
-impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
-    fn visit_primitive(&'_ mut self, e: &Primitive) -> SemanticNote {
-        let literal_lexeme = e.get_token().to_lexeme_str(self.source_str).unwrap_or("");
+impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
+    fn visit_primitive(&mut self, e: &Primitive) -> SemanticNote {
+        let source_copy = self.source_str.clone();
+        let literal_lexeme = e.get_token().to_lexeme_str(source_copy.as_str()).unwrap_or("");
         let literal_tag = e.get_token().tag;
         self.temp_token = *e.get_token();
 
@@ -174,6 +171,8 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
     /// # TODO
     /// Refactor this call-checking logic to avoid extra String allocations... This is probably very slow.
     fn visit_call(&mut self, e: &Call) -> SemanticNote {
+        // NOTE Had to copy the temporary source to appease the borrow checker... probably wasting heap space but oh well!
+        let source_copy = self.source_str.clone();
         let callee_info = e.get_callee().accept_visitor_sema(self);
         let callee_token = self.temp_token;
 
@@ -191,7 +190,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
 
         let callable_info = callable_info_opt.unwrap();
         
-        let callee_lexeme = callee_token.to_lexeme_str(self.source_str).unwrap_or("...");
+        let callee_lexeme = callee_token.to_lexeme_str(source_copy.as_str()).unwrap_or("...");
         let callable_arity = callable_info.2;
         let passed_arity = e.get_args().len() as i32;
         
@@ -309,14 +308,15 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer<'_> {
     }
 }
 
-impl StmtVisitor<bool> for Analyzer<'_> {
+impl StmtVisitor<bool> for Analyzer {
     #[allow(unused_variables)]
     fn visit_import(&mut self, s: &Import) -> bool {
         true
     }
 
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
-        let stub_name = s.get_name_token().to_lexeme_str(self.source_str).unwrap_or("");
+        let source_copy = self.source_str.clone();
+        let stub_name = s.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap_or("");
 
         let stub_ret_type = s.get_result_type().typename();
         let stub_ret_type_id = self.record_type(stub_ret_type);
@@ -329,7 +329,7 @@ impl StmtVisitor<bool> for Analyzer<'_> {
             let param_type_id = self.record_type(param_type_name.clone());
 
             self.record_name_info(
-                param.get_name_token().to_lexeme_str(self.source_str).unwrap(),
+                param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                 SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
                 RecordInfoMode::AsVariable
             );
@@ -351,7 +351,8 @@ impl StmtVisitor<bool> for Analyzer<'_> {
     }
 
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
-        let fun_name = s.get_name_token().to_lexeme_str(self.source_str).unwrap_or("");
+        let source_copy = self.source_str.clone();
+        let fun_name = s.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap_or("");
         
         let fun_ret_type = s.get_result_type().typename();
         let ret_type_id = self.record_type(fun_ret_type);
@@ -366,7 +367,7 @@ impl StmtVisitor<bool> for Analyzer<'_> {
             let param_type_id = self.record_type(param_type_name.clone());
 
             self.record_name_info(
-                param.get_name_token().to_lexeme_str(self.source_str).unwrap(),
+                param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                 SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
                 RecordInfoMode::AsVariable
             );
@@ -402,8 +403,9 @@ impl StmtVisitor<bool> for Analyzer<'_> {
     }
 
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> bool {
+        let source_copy_fml = self.source_str.clone();
         let var_name_token_ref = s.get_name_token();
-        let var_name_lexeme = var_name_token_ref.to_lexeme_str(self.source_str).unwrap_or("");
+        let var_name_lexeme = var_name_token_ref.to_lexeme_str(source_copy_fml.as_str()).unwrap_or("");
         let var_name_line_no = var_name_token_ref.line_no;
 
         let var_type_name = s.get_typing().typename();

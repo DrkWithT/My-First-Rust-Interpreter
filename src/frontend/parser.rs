@@ -27,7 +27,7 @@ impl Parser {
             next_sources: VecDeque::<QueuedSource>::new(),
             previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
             current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
-            source_id: 0,
+            source_id: 1,
             error_count: 0,
             parse_error_max: 5,
         }
@@ -411,7 +411,10 @@ impl Parser {
 
         let var_init_expr = var_init_expr_opt.unwrap();
 
-        self.consume_of([TokenType::Semicolon]);
+        if !self.consume_of([TokenType::Semicolon]) {
+            self.recover_and_report("Expected ';' .");
+            return None;
+        }
 
         Some(Box::new(VariableDecl::new(
             var_name,
@@ -479,7 +482,10 @@ impl Parser {
 
         result_expr_opt.as_ref()?;
 
-        self.consume_of([TokenType::Semicolon]);
+        if !self.consume_of([TokenType::Semicolon]) {
+            self.recover_and_report("Expected ';' .");
+            return None;
+        }
 
         Some(Box::new(Return::new(result_expr_opt.unwrap())))
     }
@@ -489,7 +495,10 @@ impl Parser {
 
         inner_expr_opt.as_ref()?;
 
-        self.consume_of([TokenType::Semicolon]);
+        if !self.consume_of([TokenType::Semicolon]) {
+            self.recover_and_report("Expected ';' .");
+            return None;
+        }
 
         Some(Box::new(ExprStmt::new(inner_expr_opt.unwrap())))
     }
@@ -533,10 +542,11 @@ impl Parser {
     fn parse_import(&mut self) -> Option<Box<dyn Stmt>> {
         self.consume_any();
 
-        let temp_target_token = *self.current();
-        
+        self.consume_of([TokenType::Identifier]);
+        let temp_target_token = *self.previous();
+
         if !self.consume_of([TokenType::Semicolon]) {
-            self.recover_and_report("Expected ';' here.");
+            self.recover_and_report("Expected ';' .");
             return None;
         }
 
@@ -558,7 +568,10 @@ impl Parser {
         self.consume_of([TokenType::Colon]);
         let stub_ret_type_box = self.parse_type();
 
-        self.consume_of([TokenType::Semicolon]);
+        if !self.consume_of([TokenType::Semicolon]) {
+            self.recover_and_report("Expected ';' .");
+            return None;
+        }
 
         Some(Box::new(ForeignStub::new(
             stub_name_token,

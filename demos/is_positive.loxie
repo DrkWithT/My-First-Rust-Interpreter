@@ -1,5 +1,7 @@
 # first native function test
 
+import stdio;
+
 fun main(): int {
     let my_number: int = read_int();
 

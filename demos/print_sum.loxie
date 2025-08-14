@@ -1,5 +1,7 @@
 # test print of iterative sum
 
+import stdio;
+
 fun sum_n(n: int): int {
     let count: int = n;
     let result: int = 0;

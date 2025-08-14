@@ -26,7 +26,7 @@ pub type FullProgramAST = VecDeque<Box<dyn Stmt>>;
 
 pub type SourceIndexedAST = (i32, Box<dyn Stmt>);
 
-pub type FullProgramASTSourced = (VecDeque<SourceIndexedAST>, HashMap<i32, String>);
+pub type FullSourceIndexedAST = (VecDeque<SourceIndexedAST>, HashMap<i32, String>);
 
 /**
  ### BRIEF
@@ -41,81 +41,77 @@ pub type FullProgramASTSourced = (VecDeque<SourceIndexedAST>, HashMap<i32, Strin
     * Do `disassemble_prgm` invocation.
  */
 pub struct CompilerMain<'cml_1> {
-    parser: Parser,
     semanator: Analyzer,
     ir_emitter: IREmitter<'cml_1>,
     bc_emitter: BytecodeEmitter,
-    temp_tu_src: String,
     first_source_name: &'cml_1 str,
 }
 
 impl<'cml_2> CompilerMain<'cml_2> {
-    pub fn new(lexicals: HashMap<String, TokenType>, first_source_name_arg: &'cml_2 str, main_source: &'cml_2 str, native_catalog: &'cml_2 HashMap<&'static str, NativeBrief>) -> Self {
-        let temp_lexer = Lexer::new(lexicals, main_source, 0, main_source.len(), 1, 1);
-        let temp_parser = Parser::new(temp_lexer);
-
+    pub fn new(first_source_name_arg: &'cml_2 str, main_source: &'cml_2 str, native_catalog: &'cml_2 HashMap<&'static str, NativeBrief>) -> Self {
         Self {
-           parser: temp_parser,
            semanator: Analyzer::new(String::from(main_source)),
            ir_emitter: IREmitter::<'cml_2>::new(main_source, native_catalog),
            bc_emitter: BytecodeEmitter::default(),
-           temp_tu_src: String::new(),
            first_source_name: first_source_name_arg,
         }
     }
 
-    fn step_parse(&mut self) -> Option<FullProgramASTSourced> {
+    fn step_parse<'cml_3>(&'cml_3 mut self, lexicals: HashMap<String, TokenType>) -> Option<FullSourceIndexedAST> {   
+        let mut local_src_map = HashMap::<i32, String>::new();
         let mut source_frontier = VecDeque::<QueuedSource>::new();
         source_frontier.push_back((String::from(self.first_source_name), 0));
-
+        
         let mut full_sourced_ast_seq = VecDeque::<SourceIndexedAST>::new();
-        let mut recorded_srcs = HashMap::<i32, String>::new();
         let mut finished_srcs = HashSet::<String>::new();
-
+        
         while !source_frontier.is_empty() {
             let (next_src_name, src_tu_id) = source_frontier.pop_back().unwrap();
-
+            
             let temp_tu_src_opt = if next_src_name.starts_with("./") {
                 fs::read_to_string(next_src_name.clone())
             } else {
                 fs::read_to_string(format!("./loxie_lib/{next_src_name}.loxie"))
             };
-
+            
             if temp_tu_src_opt.is_err() {
                 eprintln!("CompileError: Failed to read file of import '{}'", next_src_name.as_str());
                 return None;
             }
 
-            self.temp_tu_src = temp_tu_src_opt.unwrap();
+            let temp_src = temp_tu_src_opt.unwrap();
+            local_src_map.insert(src_tu_id, temp_src.clone());
+            let tu_src_view = temp_src.as_str();
 
-            self.parser.reset_with(self.temp_tu_src.clone());
-            let (tu_ast_opt, tu_successors) = self.parser.parse_file();
-
+            let temp_lexer = Lexer::<'cml_3>::new("");
+            let mut temp_parser = Parser::<'cml_3>::new(temp_lexer);
+            
+            temp_parser.reset_with(tu_src_view);
+            let (tu_ast_opt, tu_successors) = temp_parser.parse_file(&lexicals);
+            
             tu_ast_opt.as_deref()?;
-
+            
             // NOTE: Why do I reverse each TU's decls? For each TU, push top declarations in a certain order to ensure proper semantic scan ordering:
             // TU Main: | D Main | -- (imports) --> TU 1: | A B C | 
             // --> A, B, C, D, Main
             let mut temp_tu_ast = tu_ast_opt.unwrap();
             temp_tu_ast.reverse();
-
+            
             for fun_ast in temp_tu_ast {
                 full_sourced_ast_seq.push_front(
                     (src_tu_id, fun_ast)
                 );
             }
-
-            recorded_srcs.insert(src_tu_id, self.temp_tu_src.clone());
+            
             finished_srcs.insert(next_src_name);
-
+            
             for successor_src in tu_successors {
                 if !finished_srcs.contains(&successor_src.0) {
                     source_frontier.push_back(successor_src);
                 }
             }
         }
-
-        Some((full_sourced_ast_seq, recorded_srcs))
+        Some((full_sourced_ast_seq, local_src_map))
     }
 
     fn step_sema(&mut self, full_ast: &VecDeque<SourceIndexedAST>, srcs_table: &HashMap<i32, String>) -> bool {
@@ -139,8 +135,8 @@ impl<'cml_2> CompilerMain<'cml_2> {
         self.bc_emitter.generate_bytecode(full_cfg_list, full_const_groups, *main_id)
     }
 
-    pub fn compile_from_start(&mut self) -> Option<bytecode::Program> {
-        let full_program_ast_opt = self.step_parse();
+    pub fn compile_from_start(&mut self, lexicals: HashMap<String, TokenType>) -> Option<bytecode::Program> {
+        let full_program_ast_opt = self.step_parse(lexicals);
 
         full_program_ast_opt.as_ref()?;
 

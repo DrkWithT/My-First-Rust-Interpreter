@@ -23,7 +23,7 @@ use crate::vm::engine::Engine;
 
 const MAX_ARG_COUNT: usize = 2;
 const CONCH_VERSION_MAJOR: i32 = 0;
-const CONCH_VERSION_MINOR: i32 = 1;
+const CONCH_VERSION_MINOR: i32 = 2;
 const CONCH_VERSION_PATCH: i32 = 0;
 const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
 
@@ -32,7 +32,7 @@ fn main() -> ExitCode {
     let arg_count: usize = arg_list.len() - 1;
 
     if arg_count > MAX_ARG_COUNT {
-        println!("usage: ./conchvm [--help | --version | <file-name>]");
+        println!("usage: ./loxievm [--help | --version | <file-name>]");
         return ExitCode::FAILURE;
     }
 
@@ -40,7 +40,7 @@ fn main() -> ExitCode {
 
     if first_arg_str == "--version" {
         println!(
-            "conchvm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
+            "loxievm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
         );
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
@@ -147,5 +147,4 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
-    // ExitCode::SUCCESS
 }

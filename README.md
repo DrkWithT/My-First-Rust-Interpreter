@@ -15,10 +15,12 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 
 ### Feature Roadmap
  - Support simple classes. (0.3.0)
-   - Add support for built-in `char` and `varchar` types.
    - Add parsing support for class syntax.
    - Add support for semantic analysis of class stub.
-   - Add support in codegen for class.
+   - Add support in codegen for class...
+      - Support member and by-index access.
+      - Support intrinsic operations on `varchar` for now: get_char, set_char, push/pop...
+      - Classes resolve to a compile-time-known mapping of slots (indices) to corresponding fields for field member accesses. At runtime, all instance objects per class will become compact clusters of values on the stack.
  - Support strings & arrays as classes. (0.4.0)
  - Improve error diagnostics (0.4.1)
  - Add optimization passes on IR (0.4.2)

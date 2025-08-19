@@ -18,11 +18,27 @@
 | ..other.. |
 ```
 
+### Sample Object Layout (class instance on stack)
+```
+| Value(varchar{""}) | (self<String>.data = "" --> self_stack_pos + 0)
+| Value(0)           | (self<String>.length = 0 --> self_stack_pos + 1)
+| .................. |
+```
+
+### Sample Object Method Table (class methods table)
+```
+| ClassProcedure | (String::new(s: varchar) --> IDX 0)
+| ClassProcedure | (String::len() --> IDX 1)
+| ....others.... |
+```
+  - NOTE: Any reference to `self` of the current instance is just a calculated offset into the stack.
+
 ### IR Opcodes
  - `load_const <constant-id>`
  - `push <src-slot>`
  - `pop`
  - `replace <dest-slot> <src-slot>`
+ - `append_item <dest-slot-object-ref>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`
@@ -48,6 +64,7 @@
  - `load_const <constant-id>`
  - `pop`
  - `replace <dest-slot> <src-loc>`
+ - `append_item <dest-slot-object-ref>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`

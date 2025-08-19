@@ -8,17 +8,15 @@
 <array-type> ::= "[" <int> : <typename> "]"
 <comment> ::= "#" ...
 
-; exprs (TODO: fuse atom to primitive)
-<atom> ::= <primitive> | <lambda> | <array>
+; exprs
 <primitive> ::= <boolean> | <int> | <float> | <identifier> | (<compare>)
+<atom> ::= <primitive> | <string> | <array> | <lambda>
 <array> ::= "[" ( <compare> ( "," <compare> )* )? "]"
 <lambda> ::= "fun" <params> ":" <typename> <block>
 <access> ::= <atom> ("." <atom>)*
 <call> ::= <access> ( ( <compare> (, <compare>)* )? )?
-<unary> ::= <negate> | <increment> | <decrement>
+<unary> ::= <negate>
 <negate> ::= "-"? <call>
-<increment> ::= "++"? <call>
-<decrement> ::= "--"? <call>
 <factor> ::= <unary> (("*" | "/") <unary>)*
 <term> ::= <factor> (("+" | "-") <factor>)*
 <equality> ::= <term> (("==" | "!=") <term>)*
@@ -36,10 +34,14 @@
 <nestable> ::= <variable-decl> | <if> | <return> | <expr-stmt> | <while>
 <block> ::= { <nestable>* }
 <import> ::= "import" <identifier> ";"
-<native-decl> ::= "foreign" <identifier> <params> ":" <typename> ";"
+<native-decl> ::= <native-stub> | <native-class>
+<native-stub> ::= "foreign" <identifier> <params> ":" <typename> ";"
 <function-decl> ::= "fun" <identifier> <params> ":" <typename> <block>
-<top-decl> ::= <import> | <native-decl> | <function-decl>
+<class-decl> ::= "class" <identifier> <class-body>
+<class-body> ::= "{" <member-decl>+ "}"
+<member-decl> ::= ( "private" | "public" ) (<variable-decl> | <function-decl>)
+<top-decl> ::= <import> | <native-stub> | <function-decl> | <class-decl>
 <params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
 <param-decl> ::= <identifier> ":" <typename>
-<program> ::= <decl>*
+<program> ::= <top-decl>*
 ```

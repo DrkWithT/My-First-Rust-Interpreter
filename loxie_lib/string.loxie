@@ -1,0 +1,29 @@
+# string.loxie
+# Defines the native class representing strings in Loxie. The class definition defines an interface wrapping a native object containing mutable character data.
+# Version: 0.1.0
+
+class String {
+    private let m_data: varchar;
+    private let m_length: int;
+
+    # Creates a new String.
+    public fun new(vc: varchar): String;
+
+    # Returns the length of the string.
+    public fun length(): int;
+
+    # Gets the char value from a zero-indexed position.
+    public fun get(pos: int): char;
+
+    # Sets the char value at a zero-indexed position. Returns false for a valid 
+    public fun set(pos: int, c: char): bool;
+
+    # Appends a single char and returns the new length.
+    public fun append_char(c: char): int;
+
+    # Appends a string and returns the new length.
+    public fun append_string(s: String): int;
+
+    # Zeroes the buffer of a String, returning 0.
+    public fun clear(): int;
+}

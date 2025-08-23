@@ -4,6 +4,7 @@ use crate::utils::bundle::Bundle;
 use crate::vm::bytecode::{self, ArgMode, Program};
 use crate::vm::callable::ExecStatus;
 use crate::vm::value::Value;
+use crate::vm::heap::{HeapValue, ObjectHeap, ObjectTag};
 
 struct CallFrame {
     /// NOTE: Tracks current callee's arguments.
@@ -18,7 +19,9 @@ struct CallFrame {
     pub old_rbp: i32,
 }
 
+/// TODO: integrate ObjectHeap... add GC sweeping methods.
 pub struct Engine {
+    heap: ObjectHeap,
     program: Program,
     frames: VecDeque<CallFrame>,
     stack: Vec<Value>,
@@ -45,7 +48,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(program_arg: Program, stack_size: i32) -> Self {
+    pub fn new(program_arg: Program, heap_size: usize, stack_size: i32) -> Self {
         let program_main_id_opt = program_arg.get_entry_procedure_id();
 
         let mut initial_frames = VecDeque::<CallFrame>::new();
@@ -67,6 +70,7 @@ impl Engine {
         initial_stack_mem.resize(initial_stack_size, Value::Empty());
 
         Self {
+            heap: ObjectHeap::new(heap_size),
             program: program_arg,
             frames: initial_frames,
             stack: initial_stack_mem,
@@ -89,6 +93,22 @@ impl Engine {
                 .get_code()
                 .get_unchecked(self.rip as usize)
         }
+    }
+
+    fn try_sweep(&mut self) {
+        if !self.heap.is_ripe_for_sweep() {
+            return;
+        }
+
+        for val in &mut self.stack {
+            if let Value::HeapRef(object_id) = val {
+                self.heap.try_collect_cell(*object_id);
+            }
+        }
+    }
+
+    fn last_sweep(&mut self) {
+        self.heap.force_collect_all();
     }
 
     fn fetch_constant(&self, const_id: i32) -> &Value {
@@ -125,6 +145,39 @@ impl Engine {
         }
     }
 
+    pub fn fetch_heap_value_by(&mut self, arg: bytecode::Argument) -> Option<&mut HeapValue> {
+        let (arg_mode, arg_n) = arg;
+
+        if arg_mode != ArgMode::StackOffset {
+            self.status = ExecStatus::BadArgs;
+            return None;
+        }
+
+        let object_id = arg_n as i16;
+        let heap_cell_opt = self.heap.get_cell_mut(object_id);
+
+        if let Some(heap_cell_ref) = heap_cell_opt {
+            return Some(heap_cell_ref.get_value_mut());
+        }
+
+        None
+    }
+
+    fn make_heap_value(&mut self, tag: ObjectTag) -> bool {
+        match tag {
+            ObjectTag::Varchar => {
+                let temp_obj_id = self.heap.try_create_cell(tag);
+
+                if temp_obj_id != -1 {
+                    self.push_in(Value::HeapRef(temp_obj_id));
+                }
+
+                temp_obj_id != -1
+            },
+            ObjectTag::None => false,
+        }
+    }
+
     pub fn push_in(&mut self, temp: Value) {
         if self.rsp > self.stack_limit {
             eprintln!(
@@ -137,13 +190,23 @@ impl Engine {
 
         self.rsp += 1;
 
-        if self.rsp > 172 {
+        if self.rsp > self.stack_limit {
             eprintln!(
-                "RunError: rsp too large (limit 172 for testing): {}",
+                "RunError: rsp too large: {}",
                 self.rsp
             );
             self.status = ExecStatus::AccessError;
             return;
+        }
+
+        if let Value::HeapRef(object_id) = &temp {
+            let object_ref_opt = self.heap.get_cell_mut(*object_id);
+
+            if let Some(object_ref) = object_ref_opt {
+                object_ref.inc_rc();
+            } else {
+                self.status = ExecStatus::RefError;
+            }
         }
 
         *self.stack.get_mut(self.rsp as usize).unwrap() = temp;
@@ -157,6 +220,16 @@ impl Engine {
 
         let temp_value = self.stack.get_mut(self.rsp as usize).unwrap();
         self.rsp -= 1;
+
+        if let Value::HeapRef(object_id) = temp_value {
+            let object_ref_opt = self.heap.get_cell_mut(*object_id);
+
+            if let Some(object_ref) = object_ref_opt {
+                object_ref.dec_rc();
+            } else {
+                self.status = ExecStatus::RefError;
+            }
+        }
 
         Some(*temp_value)
     }
@@ -194,6 +267,17 @@ impl Engine {
 
         self.rsp -= 1;
         self.rip += 1;
+    }
+
+    fn do_make_object(&mut self, arg: bytecode::Argument) {
+        let arg_tag = match arg.1 {
+            0 => ObjectTag::Varchar,
+            _ => ObjectTag::None,
+        };
+        
+        if !self.make_heap_value(arg_tag) {
+            self.status = ExecStatus::RefError;
+        }
     }
 
     fn do_replace(&mut self, target: bytecode::Argument, source: bytecode::Argument) {
@@ -575,72 +659,75 @@ impl Engine {
             match next_instr {
                 bytecode::Instruction::Nop => {
                     self.rip += 1;
-                }
+                },
                 bytecode::Instruction::LoadConst(source) => {
                     self.do_load_const(*source);
-                }
+                },
                 bytecode::Instruction::Push(source) => {
                     self.do_push(*source);
-                }
+                },
                 bytecode::Instruction::Pop => {
                     self.do_pop();
-                }
+                },
+                bytecode::Instruction::MakeHeapValue(tag_arg) => {
+                    self.do_make_object(*tag_arg);
+                },
                 bytecode::Instruction::Replace(target, source) => {
                     self.do_replace(*target, *source);
-                }
+                },
                 bytecode::Instruction::Neg(target) => {
                     self.do_neg(*target);
-                }
+                },
                 bytecode::Instruction::Inc(target) => {
                     self.do_inc(*target);
-                }
+                },
                 bytecode::Instruction::Dec(target) => {
                     self.do_dec(*target);
-                }
+                },
                 bytecode::Instruction::Add => {
                     self.do_add();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::Sub => {
                     self.do_sub();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::Mul => {
                     self.do_mul();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::Div => {
                     self.do_div();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::CompareEq => {
                     self.do_cmp_eq();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::CompareNe => {
                     self.do_cmp_ne();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::CompareLt => {
                     self.do_cmp_lt();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::CompareGt => {
                     self.do_cmp_gt();
                     self.rhtmp = 1;
-                }
+                },
                 bytecode::Instruction::JumpIf(test, jump_target) => {
                     self.do_jump_if(*test, *jump_target);
-                }
+                },
                 bytecode::Instruction::JumpElse(test, jump_target) => {
                     self.do_jump_else(*test, *jump_target);
-                }
+                },
                 bytecode::Instruction::Jump(jump_target) => {
                     self.do_jump(*jump_target);
-                }
+                },
                 bytecode::Instruction::Return(source) => {
                     self.do_return(*source);
-                }
+                },
                 bytecode::Instruction::Call(proc_id, arity) => {
                     self.do_call(*proc_id, *arity);
                 },
@@ -648,7 +735,11 @@ impl Engine {
                     self.do_native_call(natives, *native_id);
                 },
             }
+
+            self.try_sweep();
         }
+
+        self.last_sweep();
 
         let main_result_code = self.stack.first().unwrap();
         let zero_ok = Value::Int(0);

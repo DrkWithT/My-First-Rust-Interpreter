@@ -1,36 +1,28 @@
 use std::fmt::{Display, Formatter, Result};
 
-#[repr(i32)]
-#[derive(Clone, Copy)]
-pub enum ObjectTag {
-    Str,
-    Array,
-}
-
-// #[derive(Clone, Copy)]
-// pub struct HeapRef {
-//     pub id: i32,
-//     pub count: i32,
-//     pub tag: ObjectTag,
-// }
-
 #[derive(Clone, Copy)]
 pub enum Value {
     Empty(),
     Bool(bool),
+    Char(u8),
     Int(i32),
     Float(f32),
-    // Str(HeapRef),
-    // Array(HeapRef),
-    // Callable(HeapRef),
+
+    /// References a handle to an interned `varchar`.
+    HeapRef(i16),
+
+    /// Contains an object's type ID & heap ID.
+    ObjectRef(i16, i16),
 }
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::Bool(flag) => write!(f, "{}", *flag),
+            Self::Char(c) => write!(f, "'{}'", *c),
             Self::Int(value) => write!(f, "{}", *value),
             Self::Float(value) => write!(f, "{}", *value),
+            Self::HeapRef(id) => write!(f, "varchar-{}", *id),
             _ => write!(f, "none"),
         }
     }
@@ -45,11 +37,20 @@ impl From<Value> for bool {
     }
 }
 
+impl From<Value> for char {
+    fn from(val: Value) -> Self {
+        match val {
+            Value::Char(ascii_c) => ascii_c.into::<>(),
+            _ => '\0',
+        }
+    }
+}
+
 impl From<Value> for i32 {
     fn from(val: Value) -> Self {
         match val {
             Value::Int(value) => value,
-            _ => 0,
+            _ => -1,
         }
     }
 }
@@ -68,8 +69,11 @@ impl Value {
         match self {
             Self::Empty() => 0,
             Self::Bool(_) => 1,
-            Self::Int(_) => 2,
-            Self::Float(_) => 3,
+            Self::Char(_) => 2,
+            Self::Int(_) => 3,
+            Self::Float(_) => 4,
+            Self::HeapRef(_) => 5,
+            Self::ObjectRef(type_id, _) => *type_id as i32,
         }
     }
 
@@ -77,12 +81,31 @@ impl Value {
         self.get_type_code() == rhs.get_type_code()
     }
 
+    pub fn is_same_ref(&self, other: &Self) -> bool {
+        let self_heap_id = if let Self::ObjectRef(_, heap_id) = self {
+            *heap_id
+        } else {
+            -1i16
+        };
+
+        let other_heap_id = if let Self::ObjectRef(_, rhs_heap_id) = *other {
+            rhs_heap_id
+        } else {
+            -1
+        };
+
+        self_heap_id == other_heap_id
+    }
+
     pub fn test(&self) -> bool {
         match self {
             Self::Empty() => false,
             Self::Bool(value) => *value,
+            Self::Char(value) => *value != 0,
             Self::Int(value) => *value != 0,
             Self::Float(value) => *value != 0.0f32,
+            Self::HeapRef(id) => *id != -1,
+            Self::ObjectRef(_, heap_id) => *heap_id != -1,
         }
     }
 
@@ -132,6 +155,9 @@ impl Value {
             Self::Bool(value) => *value == (*rhs).into(),
             Self::Int(value) => *value == (*rhs).into(),
             Self::Float(value) => *value == (*rhs).into(),
+            _ => {
+                self.is_same_ref(rhs)
+            },
         }
     }
 

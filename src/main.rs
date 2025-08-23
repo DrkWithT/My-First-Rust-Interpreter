@@ -20,12 +20,18 @@ use crate::utils::bundle::Bundle;
 use crate::utils::loxie_stdio;
 use crate::vm::callable::ExecStatus;
 use crate::vm::engine::Engine;
+use crate::vm::heap::TOTAL_STRING_OVERHEAD;
 
 const MAX_ARG_COUNT: usize = 2;
-const CONCH_VERSION_MAJOR: i32 = 0;
-const CONCH_VERSION_MINOR: i32 = 2;
-const CONCH_VERSION_PATCH: i32 = 0;
-const CONCH_VALUE_STACK_LIMIT: i32 = 32767;
+const LOXIM_VERSION_MAJOR: i32 = 0;
+const LOXIM_VERSION_MINOR: i32 = 2;
+const LOXIM_VERSION_PATCH: i32 = 0;
+
+// The default limit of stack slots for values.
+const LOXIM_STACK_LIMIT: i32 = 16384;
+
+// The default limit for the VM's heap memory size in estimated bytes.
+const LOXIM_HEAP_OVERHEAD_DEFAULT: usize = TOTAL_STRING_OVERHEAD * 128;
 
 fn main() -> ExitCode {
     let mut arg_list = env::args();
@@ -40,7 +46,7 @@ fn main() -> ExitCode {
 
     if first_arg_str == "--version" {
         println!(
-            "loxievm v{CONCH_VERSION_MAJOR}.{CONCH_VERSION_MINOR}.{CONCH_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
+            "loxievm v{LOXIM_VERSION_MAJOR}.{LOXIM_VERSION_MINOR}.{LOXIM_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
         );
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
@@ -106,7 +112,7 @@ fn main() -> ExitCode {
 
     let program = program_opt.unwrap();
 
-    let mut engine = Engine::new(program, CONCH_VALUE_STACK_LIMIT);
+    let mut engine = Engine::new(program, LOXIM_HEAP_OVERHEAD_DEFAULT, LOXIM_STACK_LIMIT);
 
     let pre_run_time = Instant::now();
     let engine_status = engine.run(&global_natives);
@@ -121,30 +127,34 @@ fn main() -> ExitCode {
         ExecStatus::Ok => {
             println!("\x1b[1;32mOK\x1b[0m");
             ExitCode::SUCCESS
-        }
+        },
         ExecStatus::AccessError => {
             eprintln!("\x1b[1;31mRunError: AccessError of stack operation.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
         ExecStatus::ValueError => {
             eprintln!("\x1b[1;31mRunError: Invalid Value materialized.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
+        ExecStatus::RefError => {
+            eprintln!("\x1b[1;31mRefError: Invalid heap reference materialized.\x1b[0m");
+            ExitCode::FAILURE
+        },
         ExecStatus::BadMath => {
             eprintln!("\x1b[1;31mRunError: Division by zero.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
         ExecStatus::IllegalInstruction => {
             eprintln!("\x1b[1;31mRunError: Illegal instruction fetched.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
         ExecStatus::BadArgs => {
             eprintln!("\x1b[1;31mRunError: Invalid argument passed to opcode.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
         ExecStatus::NotOk => {
             eprintln!("\x1b[1;31mRunError: Exited with non-zero status.\x1b[0m");
             ExitCode::FAILURE
-        }
+        },
     }
 }

@@ -4,6 +4,7 @@ pub enum ExecStatus {
     Ok,
     AccessError,
     ValueError,
+    RefError,
     BadMath,
     IllegalInstruction,
     BadArgs,

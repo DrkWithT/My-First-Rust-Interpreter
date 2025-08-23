@@ -10,7 +10,7 @@ pub enum ArgMode {
     StackOffset,
     ArgumentId,
     CodeOffset,
-    // HeapId,
+    HeapId,
     ProcedureId,
     NativeId,
 }
@@ -23,7 +23,7 @@ impl ArgMode {
             Self::StackOffset => "temp-off",
             Self::ArgumentId => "arg-id",
             Self::CodeOffset => "code-pos",
-            // Self::HeapId => "heap-id",
+            Self::HeapId => "heap-id",
             Self::ProcedureId => "proc-id",
             Self::NativeId => "native-id",
         }
@@ -37,6 +37,7 @@ pub enum Instruction {
     LoadConst(Argument),
     Push(Argument),
     Pop,
+    MakeHeapValue(Argument),
     Replace(Argument, Argument),
     Neg(Argument),
     Inc(Argument),

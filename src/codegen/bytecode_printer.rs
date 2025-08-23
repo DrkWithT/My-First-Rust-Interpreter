@@ -24,6 +24,11 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
             Instruction::Pop => {
                 println!("POP");
             },
+            Instruction::MakeHeapValue(arg_0) => {
+                print!("MAKE_OBJECT");
+                disassemble_op_arg(arg_0);
+                println!();
+            },
             Instruction::Replace(arg_0, arg_1) => {
                 print!("REPLACE ");
                 disassemble_op_arg(arg_0);

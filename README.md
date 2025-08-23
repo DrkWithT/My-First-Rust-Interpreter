@@ -15,7 +15,6 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 
 ### Feature Roadmap
  - Support simple classes e.g `String`. (0.3.0)
-   - Support intrinsic operations on `varchar` for now: `intrin_varchar_len` `intrin_varchar_get`, `intrin_varchar_set`, `intrin_varchar_push`, `intrin_varchar_pop`. **(WIP)**
    - Add parsing support for class syntax.
    - Add support for semantic analysis of class.
    - Add support in codegen for class... use `MAKE_OBJECT` instruction for heap values in instances pushed to the stack... **(WIP)**

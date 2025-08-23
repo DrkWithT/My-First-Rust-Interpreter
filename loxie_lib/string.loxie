@@ -7,8 +7,8 @@ import varchar;
 class String {
     private let data: varchar;
 
-    # Creates a new String.
-    public fun new(vc: varchar): String {
+    # Creates a new String wrapper for a varchar.
+    ctor new(vc: varchar) {
         self.data = vc;
     }
 
@@ -34,6 +34,14 @@ class String {
         }
 
         return -1;
+    }
+
+    public fun pop_char(): char {
+        if self.length() > 0 {
+            return intrin_varchar_pop(self.data);
+        }
+
+        return '\x00';
     }
 
     # Zeroes the buffer of a String, returning 0.

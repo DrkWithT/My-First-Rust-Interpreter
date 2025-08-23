@@ -3,14 +3,16 @@
 ### All Rules (pseudo-ABNF)
 ```
 ; other
-<typename> ::= "bool" | "int" | "float" | <fun-type> | <array-type>
+<typename> ::= "bool" | "int" | "float" | "char" | "varchar" | <fun-type> | <array-type>
 <fun-type> ::= <typename> (, <typename>)* -> <typename>
 <array-type> ::= "[" <int> : <typename> "]"
 <comment> ::= "#" ...
 
 ; exprs
-<primitive> ::= <boolean> | <int> | <float> | <identifier> | (<compare>)
-<atom> ::= <primitive> | <string> | <array> | <lambda>
+<primitive> ::= <boolean> | <int> | <float> | <char> | <identifier> | (<compare>)
+<char> ::= "\'" <NON-SINGLE-QUOTE> "\'"
+<atom> ::= <primitive> | <varchar> | <array> | <lambda>
+<varchar> ::= "\"" <NON-QUOTE>* "\""
 <array> ::= "[" ( <compare> ( "," <compare> )* )? "]"
 <lambda> ::= "fun" <params> ":" <typename> <block>
 <access> ::= <atom> ("." <atom>)*
@@ -37,9 +39,10 @@
 <native-decl> ::= <native-stub> | <native-class>
 <native-stub> ::= "foreign" <identifier> <params> ":" <typename> ";"
 <function-decl> ::= "fun" <identifier> <params> ":" <typename> <block>
+<constructor-decl> ::= "ctor" <params> <block>
 <class-decl> ::= "class" <identifier> <class-body>
 <class-body> ::= "{" <member-decl>+ "}"
-<member-decl> ::= ( "private" | "public" ) (<variable-decl> | <function-decl>)
+<member-decl> ::= ( "private" | "public" ) (<variable-decl> | <function-decl> | <constructor-decl>)
 <top-decl> ::= <import> | <native-stub> | <function-decl> | <class-decl>
 <params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
 <param-decl> ::= <identifier> ":" <typename>

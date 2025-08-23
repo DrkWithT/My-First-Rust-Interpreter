@@ -9,4 +9,4 @@ foreign intrin_varchar_set(vc: varchar, pos: int, c: char): bool;
 
 foreign intrin_varchar_push(vc: varchar, c: char): bool;
 
-foreign intrin_varchar_pop(vc: varchar, c: char): char;
+foreign intrin_varchar_pop(vc: varchar): char;

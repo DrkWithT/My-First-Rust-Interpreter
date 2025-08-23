@@ -1,0 +1,12 @@
+# varchar.loxie
+# Provides intrinsics for varchar.
+
+foreign intrin_varchar_len(vc: varchar): int;
+
+foreign intrin_varchar_get(vc: varchar, pos: int): char;
+
+foreign intrin_varchar_set(vc: varchar, pos: int, c: char): bool;
+
+foreign intrin_varchar_push(vc: varchar, c: char): bool;
+
+foreign intrin_varchar_pop(vc: varchar, c: char): char;

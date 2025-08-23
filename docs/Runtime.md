@@ -35,10 +35,10 @@
 
 ### IR Opcodes
  - `load_const <constant-id>`
- - `push <src-slot>`
+ - `push <arg>`
  - `pop`
+ - `make_heap_value <kind-tag>`
  - `replace <dest-slot> <src-slot>`
- - `append_item <dest-slot-object-ref>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`
@@ -62,9 +62,10 @@
 
 ### Opcodes
  - `load_const <constant-id>`
+ - `push <arg>`
  - `pop`
+ - `make_heap_value <kind-tag>`
  - `replace <dest-slot> <src-loc>`
- - `append_item <dest-slot-object-ref>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`

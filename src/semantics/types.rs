@@ -4,8 +4,10 @@ pub enum PrimitiveTag {
     Unknown,
     Any,
     Boolean,
+    Char,
     Integer,
-    Floating
+    Floating,
+    Varchar,
 }
 
 #[repr(i32)]
@@ -209,5 +211,35 @@ impl TypeKind for FunctionInfo {
         result.push_str(self.output.typename().as_str());
 
         result
+    }
+}
+
+pub struct ClassInfo {
+    class_name: String,
+}
+
+impl ClassInfo {
+    pub fn new(class_name_arg: String) -> Self {
+        Self {
+            class_name: class_name_arg
+        }
+    }
+}
+
+impl TypeKind for ClassInfo {
+    fn is_primitive(&self) -> bool {
+        false
+    }
+
+    fn is_sequence(&self) -> bool {
+        false
+    }
+
+    fn is_callable(&self) -> bool {
+        false
+    }
+
+    fn typename(&self) -> String {
+        self.class_name.clone()
     }
 }

@@ -17,15 +17,15 @@ use crate::frontend::token::*;
 // use crate::codegen::bytecode_printer::disassemble_program;
 // use crate::codegen::ir_printer::print_cfg;
 use crate::utils::bundle::Bundle;
-use crate::utils::loxie_stdio;
+use crate::utils::{loxie_stdio, loxie_varchar};
 use crate::vm::callable::ExecStatus;
 use crate::vm::engine::Engine;
 use crate::vm::heap::TOTAL_STRING_OVERHEAD;
 
-const MAX_ARG_COUNT: usize = 2;
 const LOXIM_VERSION_MAJOR: i32 = 0;
-const LOXIM_VERSION_MINOR: i32 = 2;
+const LOXIM_VERSION_MINOR: i32 = 3;
 const LOXIM_VERSION_PATCH: i32 = 0;
+const LOXIM_MAX_ARGC: usize = 2;
 
 // The default limit of stack slots for values.
 const LOXIM_STACK_LIMIT: i32 = 16384;
@@ -37,8 +37,8 @@ fn main() -> ExitCode {
     let mut arg_list = env::args();
     let arg_count: usize = arg_list.len() - 1;
 
-    if arg_count > MAX_ARG_COUNT {
-        println!("usage: ./loxievm [--help | --version | <file-name>]");
+    if arg_count > LOXIM_MAX_ARGC {
+        println!("usage: ./loxim [--help | --version | <file-name>]");
         return ExitCode::FAILURE;
     }
 
@@ -46,15 +46,22 @@ fn main() -> ExitCode {
 
     if first_arg_str == "--version" {
         println!(
-            "loxievm v{LOXIM_VERSION_MAJOR}.{LOXIM_VERSION_MINOR}.{LOXIM_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
+            "loxim v{LOXIM_VERSION_MAJOR}.{LOXIM_VERSION_MINOR}.{LOXIM_VERSION_PATCH}\nBy: DrkWithT (GitHub)"
         );
         return ExitCode::SUCCESS;
     } else if first_arg_str == "--help" {
-        println!("usage: ./conchvm [--help | --version | <file-name>]");
+        println!("usage: ./loxim [--help | --version | <file-name>]");
         return ExitCode::SUCCESS;
     }
 
+    // Setup 1: Bind native functions to the interpreter's global scope.
     let mut global_natives = Bundle::new();
+
+    global_natives.register_native("intrin_varchar_len", Box::new(loxie_varchar::native_intrin_varchar_len), 1);
+    global_natives.register_native("intrin_varchar_get", Box::new(loxie_varchar::native_intrin_varchar_get), 2);
+    global_natives.register_native("intrin_varchar_set", Box::new(loxie_varchar::native_intrin_varchar_set), 3);
+    global_natives.register_native("intrin_varchar_push", Box::new(loxie_varchar::native_intrin_varchar_push), 2);
+    global_natives.register_native("intrin_varchar_pop", Box::new(loxie_varchar::native_intrin_varchar_pop), 1);
     global_natives.register_native("read_int", Box::new(loxie_stdio::native_read_int), 0);
     global_natives.register_native("print_val", Box::new(loxie_stdio::native_print_val), 1);
 
@@ -74,11 +81,16 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    // Setup 2: Register important lexical items to the lexer for parsing later.
     let source_text = source_text_opt.expect("Failed to unbox source string?");
 
     let mut lexical_items = HashMap::<String, TokenType>::new();
     lexical_items.insert(String::from("foreign"), TokenType::Keyword);
     lexical_items.insert(String::from("fun"), TokenType::Keyword);
+    lexical_items.insert(String::from("ctor"), TokenType::Keyword);
+    lexical_items.insert(String::from("class"), TokenType::Keyword);
+    lexical_items.insert(String::from("private"), TokenType::Keyword);
+    lexical_items.insert(String::from("public"), TokenType::Keyword);
     lexical_items.insert(String::from("let"), TokenType::Keyword);
     lexical_items.insert(String::from("if"), TokenType::Keyword);
     lexical_items.insert(String::from("else"), TokenType::Keyword);
@@ -86,8 +98,11 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from("return"), TokenType::Keyword);
     lexical_items.insert(String::from("exit"), TokenType::Keyword);
     lexical_items.insert(String::from("bool"), TokenType::Typename);
+    lexical_items.insert(String::from("char"), TokenType::Typename);
     lexical_items.insert(String::from("int"), TokenType::Typename);
     lexical_items.insert(String::from("float"), TokenType::Typename);
+    lexical_items.insert(String::from("varchar"), TokenType::Typename);
+    lexical_items.insert(String::from("self"), TokenType::ClassSelf);
     lexical_items.insert(String::from("true"), TokenType::LiteralBool);
     lexical_items.insert(String::from("false"), TokenType::LiteralBool);
     lexical_items.insert(String::from("."), TokenType::OpAccess);
@@ -137,7 +152,7 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         },
         ExecStatus::RefError => {
-            eprintln!("\x1b[1;31mRefError: Invalid heap reference materialized.\x1b[0m");
+            eprintln!("\x1b[1;31mRefError: Invalid (empty) heap reference materialized.\x1b[0m");
             ExitCode::FAILURE
         },
         ExecStatus::BadMath => {

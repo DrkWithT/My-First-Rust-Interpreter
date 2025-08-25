@@ -45,10 +45,11 @@
 <native-stub> ::= "foreign" <identifier> <params> ":" <typename> ";"
 <function-decl> ::= "fun" <identifier> <params> ":" <typename> <block>
 <field-decl> ::= "let" <identifier> ":" <typename> ";"
+<method-decl> ::= "met" <identifier> <params> ":" <typename> <block>
 <constructor-decl> ::= "ctor" <params> <block>
 <class-decl> ::= "class" <identifier> <class-body>
 <class-body> ::= "{" <member-decl>+ "}"
-<member-decl> ::= ( "private" | "public" ) (<field-decl> | <function-decl> | <constructor-decl>)
+<member-decl> ::= ( "private" | "public" ) (<field-decl> | <method-decl> | <constructor-decl>)
 <top-decl> ::= <import> | <native-stub> | <function-decl> | <class-decl>
 <params> ::= "(" (<param-decl> ("," <param-decl>)* )? ")"
 <param-decl> ::= <identifier> ":" <typename>

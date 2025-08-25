@@ -642,6 +642,29 @@ impl<'pl_2> Parser<'pl_2> {
         )))
     }
 
+    fn parse_method_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let method_name_token = *self.current();
+        self.consume_of([TokenType::Identifier], items);
+
+        let method_params = self.parse_function_params(items);
+
+        self.consume_of([TokenType::Colon], items);
+        let method_type_box = self.parse_type(items);
+
+        let method_body_opt = self.parse_block(items);
+
+        method_body_opt.as_ref()?;
+
+        Some(Box::new(MethodDecl::new(
+            method_name_token,
+            method_params,
+            method_type_box,
+            method_body_opt.unwrap(),
+        )))
+    }
+
     fn parse_class_member(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<ClassMemberDecl> {
         self.consume_of([TokenType::Keyword], items);
 
@@ -653,7 +676,7 @@ impl<'pl_2> Parser<'pl_2> {
         let class_decl_opt = match hint_keyword {
             "let" => self.parse_field_decl(items),
             "ctor" => self.parse_constructor_decl(items),
-            "fun" => self.parse_function_decl(items),
+            "met" => self.parse_method_decl(items),
             _ => None,
         };
 

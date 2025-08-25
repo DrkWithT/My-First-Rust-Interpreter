@@ -8,49 +8,49 @@ class String {
     private let data: varchar;
 
     # Creates a new String wrapper for a varchar.
-    ctor new(vc: varchar) {
-        self.data = vc;
+    public ctor(vc: varchar) {
+        data = vc;
     }
 
     # Returns the length of the string.
-    public fun length(): int {
-        return intrin_varchar_len(self.data);
+    public met length(): int {
+        return intrin_varchar_len(data);
     }
 
     # Gets the char value from a zero-indexed position.
-    public fun get(pos: int): char {
-        return intrin_varchar_get(self.data, pos);
+    public met get(pos: int): char {
+        return intrin_varchar_get(data, pos);
     }
 
     # Sets the char value at a zero-indexed position. Returns false for a valid 
-    public fun set(pos: int, c: char): bool {
-        return intrin_varchar_set(self.data, pos, c);
+    public met set(pos: int, c: char): bool {
+        return intrin_varchar_set(data, pos, c);
     }
 
     # Appends a single char and returns the new length (-1 on error).
-    public fun append_char(c: char): int {
-        if intrin_varchar_push(self.data, c) {
-            return self.length();
+    public met append_char(c: char): int {
+        if intrin_varchar_push(data, c) {
+            return length();
         }
 
         return -1;
     }
 
-    public fun pop_char(): char {
-        if self.length() > 0 {
-            return intrin_varchar_pop(self.data);
+    public met pop_char(): char {
+        if length() > 0 {
+            return intrin_varchar_pop(data);
         }
 
         return '\x00';
     }
 
     # Zeroes the buffer of a String, returning 0.
-    public fun clear(): int {
-        let char_n: int = self.length();
+    public met clear(): int {
+        let char_n: int = length();
         let data_i: int = 0;
 
         while data_i < char_n {
-            self.set(data_i, '\x00');
+            set(data_i, '\x00');
             data_i = data_i + 1;
         }
 

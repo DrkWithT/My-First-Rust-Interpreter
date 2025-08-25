@@ -89,6 +89,7 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from("fun"), TokenType::Keyword);
     lexical_items.insert(String::from("ctor"), TokenType::Keyword);
     lexical_items.insert(String::from("class"), TokenType::Keyword);
+    lexical_items.insert(String::from("met"), TokenType::Keyword);
     lexical_items.insert(String::from("private"), TokenType::Keyword);
     lexical_items.insert(String::from("public"), TokenType::Keyword);
     lexical_items.insert(String::from("let"), TokenType::Keyword);
@@ -102,7 +103,6 @@ fn main() -> ExitCode {
     lexical_items.insert(String::from("int"), TokenType::Typename);
     lexical_items.insert(String::from("float"), TokenType::Typename);
     lexical_items.insert(String::from("varchar"), TokenType::Typename);
-    lexical_items.insert(String::from("self"), TokenType::ClassSelf);
     lexical_items.insert(String::from("true"), TokenType::LiteralBool);
     lexical_items.insert(String::from("false"), TokenType::LiteralBool);
     lexical_items.insert(String::from("."), TokenType::OpAccess);

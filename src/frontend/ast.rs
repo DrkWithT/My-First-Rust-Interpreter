@@ -1,6 +1,6 @@
 use crate::codegen::ir::Locator;
 use crate::frontend::token::{Token, TokenType};
-use crate::semantics::types;
+use crate::semantics::types::{self, ClassAccess};
 use crate::semantics::scope::SemanticNote;
 
 pub struct ParamDecl {
@@ -236,6 +236,7 @@ pub trait StmtVisitor<Res> {
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
     fn visit_field_decl(&mut self, s: &FieldDecl) -> Res;
     fn visit_constructor_decl(&mut self, s: &ConstructorDecl) -> Res;
+    fn visit_method_decl(&mut self, s: &MethodDecl) -> Res;
     fn visit_class_decl(&mut self, s: &ClassDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> Res;
@@ -464,11 +465,57 @@ impl Stmt for ConstructorDecl {
     }
 }
 
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq)]
-pub enum ClassAccess {
-    Public,
-    Private,
+/// **NOTE:** This duplicates class member function (method) representation to make its visitation less ambiguous and simplify visitation logic.
+pub struct MethodDecl {
+    name_token: Token,
+    params: Vec<ParamDecl>,
+    result_typing: Box<dyn types::TypeKind>,
+    body: Box<dyn Stmt>,
+}
+
+impl MethodDecl {
+    pub fn new(name_token: Token, params: Vec<ParamDecl>, result_typing: Box<dyn types::TypeKind>, body: Box<dyn Stmt>) -> Self {
+        Self {
+            name_token,
+            params,
+            result_typing,
+            body,
+        }
+    }
+
+    pub fn get_name_token(&self) -> &Token {
+        &self.name_token
+    }
+
+    pub fn get_params(&self) -> &Vec<ParamDecl> {
+        &self.params
+    }
+
+    pub fn get_result_type(&self) -> &dyn types::TypeKind {
+        &*self.result_typing
+    }
+
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
+    }
+}
+
+impl Stmt for MethodDecl {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_method_decl(self)
+    }
 }
 
 pub type ClassMemberDecl = (Box<dyn Stmt>, ClassAccess);

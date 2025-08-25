@@ -19,24 +19,26 @@
 ```
 
 ### Sample Object Layout (class instance on stack)
+- NOTE: Any reference to `self` of the current instance is just a calculated offset into the stack at the first layout-Value / the first entry of a class method table.
 ```
-| Value(varchar{""}) | (self<String>.data = "" --> self_stack_pos + 0)
-| Value(0)           | (self<String>.length = 0 --> self_stack_pos + 1)
+| Value(array[int, 100]{...}) | (self<Stack<100>>.data --> self_stack_pos + 0)
+| Value(0)           | (self<Stack<100>>.sp --> self_stack_pos + 1)
 | .................. |
 ```
 
 ### Sample Object Method Table (class methods table)
+- NOTE: constructors are always first in the method table.
 ```
-| ClassProcedure | (String::new(s: varchar) --> IDX 0)
-| ClassProcedure | (String::len() --> IDX 1)
+| ClassProcedure | (Stack<100>(s: varchar) --> IDX 0)
+| ClassProcedure | (Stack<100>.top() --> IDX 1)
 | ....others.... |
 ```
-  - NOTE: Any reference to `self` of the current instance is just a calculated offset into the stack.
 
 ### IR Opcodes
  - `load_const <constant-id>`
  - `push <arg>`
  - `pop`
+ - `reserve_values <slot-count>`
  - `make_heap_value <kind-tag>`
  - `replace <dest-slot> <src-slot>`
  - `neg <dest-slot>`
@@ -57,6 +59,7 @@
  - `jump_else <src-id> <dest?>`
  - `jump <dest?>`
  - `return <src-id>`
+ - `leave`: returns control from a special function (such as constructors that push in member-wise order) without an extra result value push
  - `call <function-id> <argc>`
  - `native_call <native-function-id>`
 
@@ -81,5 +84,6 @@
  - `jump_else <src-slot> <new-ip>`
  - `jump <new-ip>`
  - `return <src-slot>`
+ - `leave`
  - `call <function-id> <argc>`
  - `native_call <native-function-id>`

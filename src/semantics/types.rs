@@ -132,8 +132,10 @@ impl TypeKind for PrimitiveInfo {
         match temp_tag {
             PrimitiveTag::Any => String::from("any"),
             PrimitiveTag::Boolean => String::from("bool"),
+            PrimitiveTag::Char => String::from("char"),
             PrimitiveTag::Integer => String::from("int"),
             PrimitiveTag::Floating => String::from("float"),
+            PrimitiveTag::Varchar => String::from("varchar"),
             _ => String::from("unknown"),
         }
     }
@@ -214,6 +216,13 @@ impl TypeKind for FunctionInfo {
     }
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum ClassAccess {
+    Public,
+    Private,
+}
+
 pub struct ClassInfo {
     class_name: String,
 }
@@ -243,3 +252,5 @@ impl TypeKind for ClassInfo {
         self.class_name.clone()
     }
 }
+
+

@@ -117,7 +117,16 @@ impl<'cml_2> CompilerMain<'cml_2> {
     fn step_sema(&mut self, full_ast: &VecDeque<SourceIndexedAST>, srcs_table: &HashMap<i32, String>) -> bool {
         for (temp_ast_src_idx, temp_ast) in full_ast {
             self.semanator.reset_source(srcs_table.get(temp_ast_src_idx).unwrap().clone());
-            if !self.semanator.check_fun_ast(temp_ast.as_ref()) {
+            if !self.semanator.check_top_ast(temp_ast.as_ref()) {
+                return false;
+            }
+        }
+
+        self.semanator.clear_preprocess_decls_flag();
+
+        for (temp_ast_src_idx, temp_ast) in full_ast {
+            self.semanator.reset_source(srcs_table.get(temp_ast_src_idx).unwrap().clone());
+            if !self.semanator.check_top_ast(temp_ast.as_ref()) {
                 return false;
             }
         }

@@ -25,10 +25,15 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 println!("POP");
             },
             Instruction::MakeHeapValue(arg_0) => {
-                print!("MAKE_OBJECT");
+                print!("MAKE_HEAP_VAL");
                 disassemble_op_arg(arg_0);
                 println!();
             },
+            Instruction::MakeHeapObject(arg_0) => {
+                print!("MAKE_HEAP_OBJ");
+                disassemble_op_arg(arg_0);
+                println!();
+            }
             Instruction::Replace(arg_0, arg_1) => {
                 print!("REPLACE ");
                 disassemble_op_arg(arg_0);
@@ -96,10 +101,20 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 disassemble_op_arg(arg_0);
                 println!();
             },
+            Instruction::Leave => {
+                println!("LEAVE");
+            },
             Instruction::Call(arg_0, arg_1) => {
                 print!("CALL ");
                 disassemble_op_arg(arg_0);
                 disassemble_op_arg(arg_1);
+                println!();
+            },
+            Instruction::InstanceCall(arg_0, arg_1, arg_2) => {
+                print!("INST_CALL ");
+                disassemble_op_arg(arg_0);
+                disassemble_op_arg(arg_1);
+                disassemble_op_arg(arg_2);
                 println!();
             },
             Instruction::NativeCall(native_id) => {

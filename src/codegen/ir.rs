@@ -44,6 +44,7 @@ pub enum Opcode {
     Return,
     Leave,
     Call,
+    InstanceCall,
     NativeCall,
 }
 
@@ -55,7 +56,7 @@ impl Opcode {
             Self::Push => 1,
             Self::Pop => 0,
             Self::MakeHeapValue => 1,
-            Self::MakeHeapObject => 2,
+            Self::MakeHeapObject => 1,
             Self::Replace => 2,
             Self::Neg => 1,
             Self::Inc => 1,
@@ -77,6 +78,7 @@ impl Opcode {
             Self::Return => 1,
             Self::Leave => 0,
             Self::Call => 2,
+            Self::InstanceCall => 3,
             Self::NativeCall => 2,
         }
     }
@@ -111,6 +113,7 @@ impl Opcode {
             Self::Return => -1000,
             Self::Leave => 0,
             Self::Call => 0,
+            Self::InstanceCall => 0,
             Self::NativeCall => 0,
         }
     }
@@ -144,6 +147,7 @@ impl Opcode {
             Self::Return => "RET",
             Self::Leave => "LEAVE",
             Self::Call => "CALL",
+            Self::InstanceCall => "INST_CALL",
             Self::NativeCall => "NATIVE_CALL",
         }
     }
@@ -174,6 +178,7 @@ pub enum Instruction {
     Nonary(Opcode),
     Unary(Opcode, Locator),
     Binary(Opcode, Locator, Locator),
+    Ternary(Opcode, Locator, Locator, Locator),
 }
 
 impl Instruction {
@@ -182,14 +187,16 @@ impl Instruction {
             Self::Nonary(op) => *op,
             Self::Unary(op, _) => *op,
             Self::Binary(op, _, _) => *op,
+            Self::Ternary(op, _, _, _) => *op,
         }
     }
 
     pub fn get_arity(&self) -> i32 {
         match self {
-            Self::Nonary(_op) => 0,
-            Self::Unary(_op, _) => 1,
-            Self::Binary(_op, _, _) => 2,
+            Self::Nonary(_) => 0,
+            Self::Unary(_, _) => 1,
+            Self::Binary(_, _, _) => 2,
+            Self::Ternary(_, _, _, _) => 3,
         }
     }
 
@@ -198,6 +205,7 @@ impl Instruction {
             Self::Nonary(_) => None,
             Self::Unary(_, arg_0) => Some(arg_0),
             Self::Binary(_, arg_0, _) => Some(arg_0),
+            Self::Ternary(_, arg_0, _, _) => Some(arg_0),
         }
     }
 
@@ -206,7 +214,16 @@ impl Instruction {
             Self::Nonary(_) => None,
             Self::Unary(_, _) => None,
             Self::Binary(_, _, arg_1) => Some(arg_1),
+            Self::Ternary(_, _, arg_1, _) => Some(arg_1),
         }
+    }
+
+    pub fn get_arg_2(&self) -> Option<&Locator> {
+        if let Self::Ternary(_, _, _, arg_2) = self {
+            return Some(arg_2);
+        }
+
+        None
     }
 }
 

@@ -8,6 +8,10 @@ pub struct ClassLayout {
 }
 
 impl ClassLayout {
+    pub fn get_field_count(&self) -> i32 {
+        self.members.len() as i32
+    }
+
     pub fn add_member(&mut self, name: String) -> bool {
         let next_member_id = self.members.len() as i32;
         self.members.insert(name, next_member_id).is_none()

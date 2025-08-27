@@ -1,6 +1,6 @@
 // use crate::vm::callable::*;
 // use crate::vm::engine::Engine;
-use crate::vm::value::Value;
+use crate::vm::{heap::HeapValue, value::Value};
 
 #[repr(i32)]
 #[derive(Clone, Copy, PartialEq)]
@@ -11,6 +11,7 @@ pub enum ArgMode {
     ArgumentId,
     CodeOffset,
     HeapId,
+    InstanceFieldId,
     ProcedureId,
     NativeId,
 }
@@ -24,6 +25,7 @@ impl ArgMode {
             Self::ArgumentId => "arg-id",
             Self::CodeOffset => "code-pos",
             Self::HeapId => "heap-id",
+            Self::InstanceFieldId => "ins-field-id",
             Self::ProcedureId => "proc-id",
             Self::NativeId => "native-id",
         }
@@ -38,6 +40,7 @@ pub enum Instruction {
     Push(Argument),
     Pop,
     MakeHeapValue(Argument),
+    MakeHeapObject(Argument),
     Replace(Argument, Argument),
     Neg(Argument),
     Inc(Argument),
@@ -54,7 +57,9 @@ pub enum Instruction {
     JumpElse(Argument, Argument),
     Jump(Argument),
     Return(Argument),
+    Leave,
     Call(Argument, Argument),
+    InstanceCall(Argument, Argument, Argument),
     NativeCall(Argument),
 }
 
@@ -124,13 +129,15 @@ impl Procedure {
 #[derive(Default)]
 pub struct Program {
     procedures: Vec<Procedure>,
+    heap_preloadables: Vec<HeapValue>,
     entry_id: i32,
 }
 
 impl Program {
-    pub fn new(procedures_arg: Vec<Procedure>, entry_id_arg: i32) -> Self {
+    pub fn new(procedures_arg: Vec<Procedure>, heap_preloadables_arg: Vec<HeapValue>, entry_id_arg: i32) -> Self {
         Self {
             procedures: procedures_arg,
+            heap_preloadables: heap_preloadables_arg,
             entry_id: entry_id_arg,
         }
     }
@@ -149,5 +156,13 @@ impl Program {
         } else {
             None
         }
+    }
+
+    pub fn get_heap_preloadables(&self) -> &Vec<HeapValue> {
+        &self.heap_preloadables
+    }
+
+    pub fn get_heap_preloadables_mut(&mut self) -> &mut Vec<HeapValue> {
+        &mut self.heap_preloadables
     }
 }

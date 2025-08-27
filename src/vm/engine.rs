@@ -17,6 +17,8 @@ struct CallFrame {
     pub caller_pos: i32,
 
     pub old_rbp: i32,
+
+    pub opt_instance: i16,
 }
 
 /// TODO: integrate ObjectHeap... add GC sweeping methods.
@@ -48,7 +50,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(program_arg: Program, heap_size: usize, stack_size: i32) -> Self {
+    pub fn new(mut program_arg: Program, heap_size: usize, stack_size: i32) -> Self {
         let program_main_id_opt = program_arg.get_entry_procedure_id();
 
         let mut initial_frames = VecDeque::<CallFrame>::new();
@@ -62,7 +64,15 @@ impl Engine {
                 caller_id: 0,
                 caller_pos: 0,
                 old_rbp: 0,
+                opt_instance: -1,
             });
+        }
+
+        let mut initial_heap = ObjectHeap::new(heap_size);
+
+        for temp_heap_val in program_arg.get_heap_preloadables_mut() {
+            let temp_cell_id = initial_heap.try_create_cell(temp_heap_val.get_object_tag());
+            *initial_heap.get_cell_mut(temp_cell_id).unwrap().get_value_mut() = std::mem::take(temp_heap_val);
         }
 
         let initial_stack_size = stack_size as usize;
@@ -70,7 +80,7 @@ impl Engine {
         initial_stack_mem.resize(initial_stack_size, Value::Empty());
 
         Self {
-            heap: ObjectHeap::new(heap_size),
+            heap: initial_heap,
             program: program_arg,
             frames: initial_frames,
             stack: initial_stack_mem,
@@ -124,13 +134,29 @@ impl Engine {
     fn fetch_stack_temp(&self, base_offset: i32) -> &Value {
         let absolute_offset = self.rbp + base_offset;
 
-        unsafe { self.stack.get_unchecked(absolute_offset as usize) }
+        unsafe {
+            self.stack.get_unchecked(absolute_offset as usize)
+        }
     }
 
     fn fetch_stored_arg(&self, arg_id: i32) -> &Value {
         let current_frame_ref = &self.frames.back().unwrap().callee_args;
 
-        unsafe { current_frame_ref.get_unchecked(arg_id as usize) }
+        unsafe {
+            current_frame_ref.get_unchecked(arg_id as usize)
+        }
+    }
+
+    fn fetch_inst_field(&self, arg_id: i32) -> &Value {
+        let instance_id_v = self.frames.back().unwrap().opt_instance;
+
+        if instance_id_v == -1 {
+            eprintln!("RunWarning: invalid instance ID for field access- crash is inevitable.");
+        }
+
+        unsafe {
+            self.heap.get_cell(instance_id_v).unwrap_unchecked().get_value().try_ref_instance_field(arg_id).unwrap_unchecked()
+        }
     }
 
     fn fetch_value_by(&self, arg: bytecode::Argument) -> Option<&Value> {
@@ -141,6 +167,7 @@ impl Engine {
             ArgMode::ConstantId => Some(self.fetch_constant(arg_id)),
             ArgMode::StackOffset => Some(self.fetch_stack_temp(arg_id)),
             ArgMode::ArgumentId => Some(self.fetch_stored_arg(arg_id)),
+            ArgMode::InstanceFieldId => Some(self.fetch_inst_field(arg_id)),
             _ => None,
         }
     }
@@ -174,7 +201,7 @@ impl Engine {
 
                 temp_obj_id != -1
             },
-            ObjectTag::None => false,
+            _ => false,
         }
     }
 
@@ -269,7 +296,7 @@ impl Engine {
         self.rip += 1;
     }
 
-    fn do_make_object(&mut self, arg: bytecode::Argument) {
+    fn do_make_heap_value(&mut self, arg: bytecode::Argument) {
         let arg_tag = match arg.1 {
             0 => ObjectTag::Varchar,
             _ => ObjectTag::None,
@@ -277,22 +304,47 @@ impl Engine {
         
         if !self.make_heap_value(arg_tag) {
             self.status = ExecStatus::RefError;
+            return;
         }
+
+        self.rip += 1;
+    }
+
+    fn do_make_heap_object(&mut self, arg: bytecode::Argument) {
+        // TODO: implement this after adding Instances to HeapValue.
+        let instance_field_n = arg.1;
+        let temp_fields = Vec::<Value>::with_capacity(instance_field_n as usize);
+
+        let obj_id = self.heap.try_create_cell(ObjectTag::Instance);
+        *self.heap.get_cell_mut(obj_id).unwrap().get_value_mut() = HeapValue::Instance(temp_fields);
+        self.push_in(Value::HeapRef(obj_id));
+
+        self.rip += 1;
     }
 
     fn do_replace(&mut self, target: bytecode::Argument, source: bytecode::Argument) {
         let target_slot = target.1;
         let incoming_value_opt = self.fetch_value_by(source);
-
+        
         if incoming_value_opt.is_none() {
             self.status = ExecStatus::AccessError;
             return;
         }
+        
+        let has_object_field = target.0 == ArgMode::InstanceFieldId;
+        
+        if !has_object_field {
+            unsafe {
+                let incoming_value = incoming_value_opt.unwrap_unchecked();
+                *self.stack.get_unchecked_mut(target_slot as usize) = *incoming_value;
+            }
+        } else {
+            let curr_instance_id = self.frames.back().unwrap().opt_instance;
 
-        unsafe {
-            let incoming_value = incoming_value_opt.unwrap_unchecked();
-
-            *self.stack.get_unchecked_mut(target_slot as usize) = *incoming_value;
+            unsafe {
+                let incoming_value_for_field = incoming_value_opt.unwrap_unchecked();
+                *self.heap.get_cell_mut(curr_instance_id).unwrap_unchecked().get_value_mut().try_ref_instance_field_mut(target_slot).unwrap_unchecked() = *incoming_value_for_field;
+            }
         }
 
         // Discard immediate assigned value by lazy deletion.
@@ -597,6 +649,16 @@ impl Engine {
         self.frames.pop_back();
     }
 
+    fn do_leave(&mut self) {
+        let returning_frame = self.frames.back().unwrap();
+        self.rpid = returning_frame.caller_id;
+        self.rip = returning_frame.caller_pos;
+        self.rsp = self.rbp;
+
+        self.rbp = returning_frame.old_rbp;
+        self.frames.pop_back();
+    }
+
     fn do_call(&mut self, procedure_id: bytecode::Argument, arg_count: bytecode::Argument) {
         let (proc_arg_mode, proc_id) = procedure_id;
 
@@ -633,6 +695,53 @@ impl Engine {
             caller_id: self.rpid,
             caller_pos: ret_instruction_pos,
             old_rbp: self.rbp,
+            opt_instance: -1,
+        });
+
+        self.rpid = proc_id;
+        self.rip = 0;
+        self.rbp = self.rsp + 1;
+    }
+
+    fn do_instance_call(&mut self, instance_arg: bytecode::Argument, fun_id_arg: bytecode::Argument, args_n: bytecode::Argument) {
+        let instance_ref_slot = instance_arg.1 as i16;
+
+        let (proc_arg_mode, proc_id) = fun_id_arg;
+
+        if proc_arg_mode != ArgMode::ProcedureId {
+            self.status = ExecStatus::BadArgs;
+            return;
+        }
+
+        let (_, pending_arg_count) = args_n;
+
+        let mut temp_callee_args = Vec::<Value>::with_capacity(pending_arg_count as usize);
+        temp_callee_args.resize(pending_arg_count as usize, Value::Empty());
+
+        for arg_it in 0..pending_arg_count {
+            if let Some(temp_arg) = self.pop_off() {
+                unsafe {
+                    let arg_insert_it = pending_arg_count - (1 + arg_it);
+                    *temp_callee_args.get_unchecked_mut(arg_insert_it as usize) = temp_arg;
+                }
+            } else {
+                eprintln!(
+                    "RunError: Could not transfer all args into method's ArgStore:\n\trbp = {}, rsp = {}",
+                    self.rbp, self.rsp
+                );
+                self.status = ExecStatus::AccessError;
+                return;
+            }
+        }
+
+        let ret_instruction_pos = self.rip + 1;
+
+        self.frames.push_back(CallFrame {
+            callee_args: temp_callee_args,
+            caller_id: self.rpid,
+            caller_pos: ret_instruction_pos,
+            old_rbp: self.rbp,
+            opt_instance: instance_ref_slot,
         });
 
         self.rpid = proc_id;
@@ -670,7 +779,10 @@ impl Engine {
                     self.do_pop();
                 },
                 bytecode::Instruction::MakeHeapValue(tag_arg) => {
-                    self.do_make_object(*tag_arg);
+                    self.do_make_heap_value(*tag_arg);
+                },
+                bytecode::Instruction::MakeHeapObject(heap_cell_n_arg) => {
+                    self.do_make_heap_object(*heap_cell_n_arg);
                 },
                 bytecode::Instruction::Replace(target, source) => {
                     self.do_replace(*target, *source);
@@ -728,8 +840,14 @@ impl Engine {
                 bytecode::Instruction::Return(source) => {
                     self.do_return(*source);
                 },
+                bytecode::Instruction::Leave => {
+                    self.do_leave();
+                }
                 bytecode::Instruction::Call(proc_id, arity) => {
                     self.do_call(*proc_id, *arity);
+                },
+                bytecode::Instruction::InstanceCall(instance_slot, fun_id, arity) => {
+                    self.do_instance_call(*instance_slot, *fun_id, *arity);
                 },
                 bytecode::Instruction::NativeCall(native_id) => {
                     self.do_native_call(natives, *native_id);

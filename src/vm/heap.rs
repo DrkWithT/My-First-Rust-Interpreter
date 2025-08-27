@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+use crate::vm::value::Value;
+
 const BASE_STRING_OVERHEAD: usize = 24;
 const PRESET_STRING_CONTENT_OVERHEAD: usize = 26;
 pub const TOTAL_STRING_OVERHEAD: usize = BASE_STRING_OVERHEAD + PRESET_STRING_CONTENT_OVERHEAD;
@@ -12,6 +14,7 @@ pub enum ObjectTag {
     None,
     Varchar,
     // Array,
+    Instance,
 }
 
 #[derive(Clone)]
@@ -19,6 +22,13 @@ pub enum HeapValue {
     Empty(),
     Varchar(String),
     // Array(Vec<Value>),
+    Instance(Vec<Value>),
+}
+
+impl Default for HeapValue {
+    fn default() -> Self {
+        Self::Empty()
+    }
 }
 
 impl HeapValue {
@@ -26,6 +36,7 @@ impl HeapValue {
         match self {
             Self::Empty() => ObjectTag::None,
             Self::Varchar(_) => ObjectTag::Varchar,
+            Self::Instance(_) => ObjectTag::Instance,
         }
     }
 
@@ -95,6 +106,22 @@ impl HeapValue {
         }
 
         0
+    }
+
+    pub fn try_ref_instance_field(&self, field_pos: i32) -> Option<&Value> {
+        if let Self::Instance(fields) = self {
+            return fields.get(field_pos as usize);
+        }
+
+        None
+    }
+
+    pub fn try_ref_instance_field_mut(&mut self, field_pos: i32) -> Option<&mut Value> {
+        if let Self::Instance(fields) = self {
+            return fields.get_mut(field_pos as usize);
+        }
+
+        None
     }
 }
 
@@ -168,6 +195,10 @@ impl ObjectHeap {
         }
 
         false
+    }
+
+    pub fn get_cell(&self, id: i16) -> Option<&HeapCell> {
+        self.entries.get(id as usize)
     }
 
     pub fn get_cell_mut(&mut self, id: i16) -> Option<&mut HeapCell> {

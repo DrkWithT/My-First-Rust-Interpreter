@@ -7,8 +7,7 @@ use std::{
 
 use crate::{
     codegen::{
-        bytecode_emitter::BytecodeEmitter,
-        ir_emitter::{IREmitter, IRResult},
+        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}
     },
     frontend::{
         ast::Stmt, lexer::Lexer, parser::Parser, token::TokenType
@@ -161,8 +160,10 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         let mut full_program_ir = full_program_ir_opt.unwrap();
 
-        // disassemble_program(&temp_bc);
+        let temp_bc = self.step_bc_emit(&mut full_program_ir);
 
-        self.step_bc_emit(&mut full_program_ir)
+        disassemble_program(temp_bc.as_ref().unwrap());
+
+        temp_bc
     }
 }

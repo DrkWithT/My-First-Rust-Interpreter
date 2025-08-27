@@ -13,6 +13,25 @@ use crate::utils::bundle::NativeBrief;
 use crate::vm::heap::HeapValue;
 use crate::vm::value::Value;
 
+fn translate_escaped_char(lexeme: &str) -> char {
+    let mut c_sequence = lexeme.chars();
+    let c_0: char = c_sequence.next().unwrap_or('\0');
+
+    if c_0 != '\\' {
+        return c_0;
+    }
+
+    let c_1 = c_sequence.next().unwrap_or('\0');
+
+    match c_1 {
+        // '0' => '\0',
+        't' => '\t',
+        'r' => '\r',
+        'n' => '\n',
+        _ => '\0',
+    }
+}
+
 type IRLinkPair = (i32, i32);
 pub type IRResult = (CFGStorage, Vec<Vec<Value>>, i32, Vec<HeapValue>);
 type FuncInfo = (Locator, i32);
@@ -399,8 +418,8 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
                 Some(temp_flag_locator)
             }
             TokenType::LiteralChar => {
-                let temp_char = literal_lexeme.chars().nth(0).unwrap_or('?');
-                let temp_char_locator = self.record_proto_constant(Value::Char(temp_char as u8));
+                let parsed_char = translate_escaped_char(literal_lexeme);
+                let temp_char_locator = self.record_proto_constant(Value::Char(parsed_char as u8));
 
                 if !self.skip_emit {
                     self.emit_step(Instruction::Unary(

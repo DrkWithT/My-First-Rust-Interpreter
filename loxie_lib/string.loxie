@@ -42,7 +42,7 @@ class String {
             return intrin_varchar_pop(data);
         }
 
-        return '\x00';
+        return '\0';
     }
 
     # Zeroes the buffer of a String, returning 0.
@@ -51,7 +51,7 @@ class String {
         let data_i: int = 0;
 
         while data_i < char_n {
-            set(data_i, '\x00');
+            set(data_i, '\0');
             data_i = data_i + 1;
         }
 

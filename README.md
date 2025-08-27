@@ -14,15 +14,13 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - NOTE: the compiler only reads sources relative to the `loxie_lib` directory or the invoked-from directory for now.
 
 ### Feature Roadmap
- - Support simple classes e.g `String`. (0.3.0)
-   - Add support for `MAKE_HEAP_OBJECT` emitted instructions in codegen for constructors.
-   - Add support for VM to preload heap items from `IRResult` before execution.
-   - Add support for "self" references in call frames to have proper context of method calls. **(TODO)**
+ - Support simple classes e.g `String`. (0.3.0) **(WIP)**
+ - Improve error diagnostics (0.3.1)
+ - Do optimizations (0.3.2)
+    - Reduce bytecode instruction representation size... maybe use `i16` vs. `i32`?
+    - Instruction substitution passes on IR (strength reduction)
  - Support flexible arrays. (0.4.0)
- - Improve error diagnostics (0.4.1)
- - Add optimization passes on IR (0.4.2)
-    - Instruction substitutions
- - Add more standard I/O native functions! (0.4.3)
+ - Add more standard I/O native functions! (0.4.1)
  - Improve syntax highlighting on Loxie's local VSCode extension:
    - Add these keywords: `ctor`, `class`, `private`, `public`, `met`
    - Add these typenames: `char`, `varchar`

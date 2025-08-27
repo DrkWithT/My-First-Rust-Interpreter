@@ -29,8 +29,8 @@ n: | .................. |
 .. | (method table 0x0) | <-- (class method table's ID)
 ```
 
-### Sample Object Method Table (class methods table)
-- NOTE: These tables map method IDs to offsets of top-level generated functions in the `Program`. Constructors are always first in the method table.
+### Sample Object Method Table (class method maps are compile time!)
+- NOTE: These tables map method IDs to offsets of top-level generated functions in the `Program`. Constructors should be first in the method table.
 - NOTE: the `CALL_METHOD <method-id> <arity-n>` instruction will dispatch through the table by the call frame reference's table ID.
 ```
 .. | MetTable_x0000 |
@@ -44,7 +44,7 @@ n: | .................. |
  - `push <arg>`
  - `pop`
  - `make_heap_value <kind-tag>`: heap allocates a heap typed value and pushes its reference onto the stack
- - `make_heap_object <member-count> <method-table-id>`: heap allocates a class instance and places its reference on the stack.
+ - `make_heap_object <member-count>`: heap allocates a class instance of `member-count` members and places its reference on the stack.
  - `replace <dest-slot> <src-slot>`: can also emplace a fresh heap value to its corresponding heap cell.
  - `neg <dest-slot>`
  - `inc <dest-slot>`
@@ -66,8 +66,8 @@ n: | .................. |
  - `return <src-id>`
  - `leave`: returns control from a special function (such as constructors that push in member-wise order) without an extra result value push
  - `call <function-id> <argc>`
+ - `instance_call <object-ref-slot> <actual-function-id> <argc>`
  - `native_call <native-function-id>`
- - `method_call <method-table-id> <>`
 
 ### Opcodes
  - `load_const <constant-id>`
@@ -93,4 +93,5 @@ n: | .................. |
  - `return <src-slot>`
  - `leave`
  - `call <function-id> <argc>`
+ - `instance_call <object-ref-slot> <actual-function-id> <argc>`
  - `native_call <native-function-id>`

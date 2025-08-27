@@ -139,9 +139,9 @@ impl<'cml_2> CompilerMain<'cml_2> {
     }
 
     fn step_bc_emit(&mut self, full_ir: &mut IRResult) -> Option<bytecode::Program> {
-        let (full_cfg_list, full_const_groups, main_id) = full_ir;
+        let (full_cfg_list, full_const_groups, main_id, heap_preloadables) = full_ir;
 
-        self.bc_emitter.generate_bytecode(full_cfg_list, full_const_groups, *main_id)
+        self.bc_emitter.generate_bytecode(full_cfg_list, full_const_groups, *main_id, heap_preloadables)
     }
 
     pub fn compile_from_start(&mut self, lexicals: HashMap<String, TokenType>) -> Option<bytecode::Program> {

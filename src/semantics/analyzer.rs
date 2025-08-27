@@ -277,7 +277,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
 
         if callable_info_opt_1.is_none() && callable_info_opt_2.is_none() {
             self.report_culprit_error(&callee_token, "The callee name is a non-callable type- Not a procedure, method, or lambda.");
-            return SemanticNote::Dud;
+            SemanticNote::Dud
         } else if callable_info_opt_1.is_some() {
             let proc_or_ctor_info = callable_info_opt_1.unwrap();
             

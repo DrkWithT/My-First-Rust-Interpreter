@@ -42,17 +42,12 @@ impl ClassBlueprint {
  * ### ABOUT
  * Maps class types by their exact type IDs to their semantic information.
  */
+#[derive(Default)]
 pub struct BlueprintTable {
     blueprints: HashMap<i32, ClassBlueprint>
 }
 
 impl BlueprintTable {
-    pub fn default() -> Self {
-        Self {
-            blueprints: HashMap::<i32, ClassBlueprint>::default(),
-        }
-    }
-
     pub fn try_get_entry_mut(&mut self, class_id: i32) -> Option<&mut ClassBlueprint> {
         self.blueprints.get_mut(&class_id)
     }

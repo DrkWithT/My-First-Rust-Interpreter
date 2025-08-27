@@ -161,6 +161,15 @@ impl ObjectHeap {
         self.overhead > self.overhead_limit
     }
 
+    pub fn preload_cell_at(&mut self, target_id: i16, value: HeapValue) -> bool {
+        if let Some(target_ref) = self.entries.get_mut(target_id as usize) {
+            *target_ref.get_value_mut() = value;
+            return true;
+        }
+
+        false
+    }
+
     pub fn get_cell_mut(&mut self, id: i16) -> Option<&mut HeapCell> {
         self.entries.get_mut(id as usize)
     }

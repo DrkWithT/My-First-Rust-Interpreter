@@ -1,5 +1,5 @@
 #[repr(i32)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum TokenType {
     Unknown,
     Spaces,
@@ -72,21 +72,13 @@ impl TokenType {
     }
 }
 
-impl Copy for TokenType {
-    // NOTE: this impl is a required dud to make the int32-based enum copyable.
-}
-
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Token {
     pub tag: TokenType,
     pub start: usize,
     pub length: usize,
     pub line_no: usize,
     pub col_no: usize,
-}
-
-impl Copy for Token {
-    // NOTE: This is a dud for implementing copy operations for Token.
 }
 
 impl Token {

@@ -8,7 +8,7 @@ pub enum Value {
     Int(i32),
     Float(f32),
 
-    /// References a handle to an interned `varchar`.
+    /// References a handle to an interned `varchar` / other heap typed value.
     HeapRef(i16),
 
     /// Contains an object's type ID & heap ID.

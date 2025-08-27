@@ -21,13 +21,13 @@ const ANY_TYPE_ID_N: i32 = 5;
 #[derive(Clone, Copy, PartialEq)]
 enum RecordInfoMode {
     /// Denotes a variable.
-    AsVariable,
+    Variable,
 
     /// Denotes a function (and eventually lambdas).
-    AsCallable,
+    Callable,
 
     /// Denotes a class member.
-    AsMember,
+    Member,
 }
 
 /**
@@ -191,9 +191,9 @@ impl Analyzer {
 
     fn record_name_info(&mut self, name: &str, info: SemanticNote, mode: RecordInfoMode) -> bool {
         match mode {
-            RecordInfoMode::AsVariable => self.scopes.current_scope_mut().unwrap().try_set_entry(name, info),
-            RecordInfoMode::AsCallable => self.scopes.global_scope_mut().unwrap().try_set_entry(name, info),
-            RecordInfoMode::AsMember => {
+            RecordInfoMode::Variable => self.scopes.current_scope_mut().unwrap().try_set_entry(name, info),
+            RecordInfoMode::Callable => self.scopes.global_scope_mut().unwrap().try_set_entry(name, info),
+            RecordInfoMode::Member => {
                 self.record_class_member_info(self.current_class_id, name, self.current_class_mod, info)
             }
         }
@@ -271,8 +271,6 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
             self.report_culprit_error(&callee_token, "The callee name is likely undeclared, did you declare <name> before?");
             return SemanticNote::Dud;
         }
-
-        // TODO: refactor the callable info retrieval to consider the constructor lookup!
 
         let callable_info_opt_1 = callee_info.try_unbox_callable_info(); // NOTe: this is a procedure OR ctor!
         let callable_info_opt_2: Option<RawMethodCallable> = if callable_info_opt_1.is_none() { callee_info.try_unbox_method_info() } else { None };
@@ -408,7 +406,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
         let expr_line_no = self.temp_token.line_no;
 
         self.set_current_class_id(
-            if let Some(class_id) = lhs_info.try_unbox_class_info_id() { class_id } else { -1 }
+            lhs_info.try_unbox_class_info_id().unwrap_or(-1)
         );
         let rhs_info = e.get_rhs().accept_visitor_sema(self);
 
@@ -476,7 +474,7 @@ impl StmtVisitor<bool> for Analyzer {
             self.record_name_info(
                 param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                 SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                RecordInfoMode::AsVariable
+                RecordInfoMode::Variable
             );
             
             stub_param_types.push(param_type_id);
@@ -484,7 +482,7 @@ impl StmtVisitor<bool> for Analyzer {
 
         if !self.record_name_info(
             stub_name,
-            SemanticNote::Callable(stub_param_types, stub_ret_type_id, stub_arity), RecordInfoMode::AsCallable
+            SemanticNote::Callable(stub_param_types, stub_ret_type_id, stub_arity), RecordInfoMode::Callable
         ) {
             let redef_stub_msg = format!("Invalid redeclaration of procedure '{stub_name}'");
             self.report_plain_error(redef_stub_msg.as_str());
@@ -513,7 +511,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::AsVariable
+                    RecordInfoMode::Variable
                 );
             }
 
@@ -533,7 +531,7 @@ impl StmtVisitor<bool> for Analyzer {
                 fun_param_types.push(param_type_id);
             }
 
-            if !self.record_name_info(fun_name, SemanticNote::Callable(fun_param_types, ret_type_id, fun_arity), RecordInfoMode::AsCallable) {
+            if !self.record_name_info(fun_name, SemanticNote::Callable(fun_param_types, ret_type_id, fun_arity), RecordInfoMode::Callable) {
                 let redef_fun_msg = format!("Invalid redeclaration of procedure '{fun_name}'");
                 self.report_plain_error(redef_fun_msg.as_str());
 
@@ -551,7 +549,7 @@ impl StmtVisitor<bool> for Analyzer {
             let field_type_id = self.record_type(field_typename.clone());
             let field_name_str = s.get_name_token().to_lexeme_str(&src_copy).unwrap_or("");
 
-            self.record_name_info(field_name_str, SemanticNote::DataValue(field_type_id, ValueCategoryTag::Identity), RecordInfoMode::AsMember);
+            self.record_name_info(field_name_str, SemanticNote::DataValue(field_type_id, ValueCategoryTag::Identity), RecordInfoMode::Member);
         }
 
         true
@@ -597,7 +595,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::AsVariable
+                    RecordInfoMode::Variable
                 );
             }
 
@@ -630,7 +628,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::AsVariable
+                    RecordInfoMode::Variable
                 );
             }
 
@@ -650,7 +648,7 @@ impl StmtVisitor<bool> for Analyzer {
                 met_param_types.push(param_type_id);
             }
 
-            if !self.record_name_info(met_name, SemanticNote::Method(met_param_types, met_ret_type_id, met_arity, self.current_class_id), RecordInfoMode::AsMember) {
+            if !self.record_name_info(met_name, SemanticNote::Method(met_param_types, met_ret_type_id, met_arity, self.current_class_id), RecordInfoMode::Member) {
                 let redef_fun_msg = format!("Invalid redeclaration of procedure '{met_name}'");
                 self.report_plain_error(redef_fun_msg.as_str());
 
@@ -667,7 +665,7 @@ impl StmtVisitor<bool> for Analyzer {
         self.record_new_class_bp(class_type_id);
 
         if self.prep_flag {
-            if !(self.record_name_info(&class_name, SemanticNote::ClassEntity(class_type_id), RecordInfoMode::AsVariable)) {
+            if !(self.record_name_info(&class_name, SemanticNote::ClassEntity(class_type_id), RecordInfoMode::Variable)) {
                 let temp_line_no = self.temp_token.line_no;
                 let redecl_class_msg = format!("Cannot redeclare class {} at line {temp_line_no}", class_name.as_str());
                 self.report_plain_error(&redecl_class_msg);
@@ -724,7 +722,7 @@ impl StmtVisitor<bool> for Analyzer {
         if !self.record_name_info(
             var_name_lexeme,
             SemanticNote::DataValue(var_type_id, ValueCategoryTag::Identity),
-            RecordInfoMode::AsVariable
+            RecordInfoMode::Variable
         ) {
             let redef_var_msg = format!("Invalid redeclaration of variable '{var_name_lexeme}'");
             self.report_plain_error(redef_var_msg.as_str());

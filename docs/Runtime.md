@@ -7,6 +7,7 @@
     - Caller's return address
     - Callee arguments
     - Caller's old rbp
+    - Optional "self" reference to the callee's object.
   - The value stack contains data.
   - Variables become stack values offset from a base position from a call frame.
   - Planned: GC or ref-counting for chunky objects
@@ -15,32 +16,36 @@
 ```
 | Value(42) | (call_frame.base_pos + 1)
 | Value(24) | (call_frame.base_pos)
-| ..other.. |
+| .(other). |
 ```
 
-### Sample Object Layout (class instance on stack)
-- NOTE: Any reference to `self` of the current instance is just a calculated offset into the stack at the first layout-Value / the first entry of a class method table.
+### Sample Object Layout (class instance on heap)
+- NOTE: any referenced class member maps to some index into a class object's member table.
 ```
-| Value(array[int, 100]{...}) | (self<Stack<100>>.data --> self_stack_pos + 0)
-| Value(0)           | (self<Stack<100>>.sp --> self_stack_pos + 1)
-| .................. |
+0: | Value(0)           | (self<Stack<100>>.sp --> table_0.members + 0)
+1: | Value([int, 100]{})| (self<Stack<100>>.data --> table_0.members + 1)
+n: | .................. |
+   ----------------------
+.. | (method table 0x0) | <-- (class method table's ID)
 ```
 
 ### Sample Object Method Table (class methods table)
-- NOTE: constructors are always first in the method table.
+- NOTE: These tables map method IDs to offsets of top-level generated functions in the `Program`. Constructors are always first in the method table.
+- NOTE: the `CALL_METHOD <method-id> <arity-n>` instruction will dispatch through the table by the call frame reference's table ID.
 ```
-| ClassProcedure | (Stack<100>(s: varchar) --> IDX 0)
-| ClassProcedure | (Stack<100>.top() --> IDX 1)
-| ....others.... |
+.. | MetTable_x0000 |
+0: | ClassProcedure | (Stack<int>(capacity: int) --> IDX A)
+1: | ClassProcedure | (Stack<int>.top() --> IDX B)
+.. | (more methods) |
 ```
 
 ### IR Opcodes
  - `load_const <constant-id>`
  - `push <arg>`
  - `pop`
- - `reserve_values <slot-count>`
- - `make_heap_value <kind-tag>`
- - `replace <dest-slot> <src-slot>`
+ - `make_heap_value <kind-tag>`: heap allocates a heap typed value and pushes its reference onto the stack
+ - `make_heap_object <member-count> <method-table-id>`: heap allocates a class instance and places its reference on the stack.
+ - `replace <dest-slot> <src-slot>`: can also emplace a fresh heap value to its corresponding heap cell.
  - `neg <dest-slot>`
  - `inc <dest-slot>`
  - `dec <dest-slot>`
@@ -62,12 +67,14 @@
  - `leave`: returns control from a special function (such as constructors that push in member-wise order) without an extra result value push
  - `call <function-id> <argc>`
  - `native_call <native-function-id>`
+ - `method_call <method-table-id> <>`
 
 ### Opcodes
  - `load_const <constant-id>`
  - `push <arg>`
  - `pop`
  - `make_heap_value <kind-tag>`
+ - `make_heap_object <member-count> <method-table-id>`
  - `replace <dest-slot> <src-loc>`
  - `neg <dest-slot>`
  - `inc <dest-slot>`

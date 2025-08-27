@@ -10,6 +10,7 @@ class String {
     # Creates a new String wrapper for a varchar.
     public ctor(vc: varchar) {
         data = vc;
+        return 0;
     }
 
     # Returns the length of the string.

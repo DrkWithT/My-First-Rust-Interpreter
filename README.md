@@ -15,13 +15,9 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 
 ### Feature Roadmap
  - Support simple classes e.g `String`. (0.3.0)
-   - Add support for semantic analysis of class.
-      - Complete methods for class visitations.
-      - Refactor name lookups to handle ctor calls, class fields, and method calls if needed.
-   - Add support in codegen for class... use `MAKE_OBJECT` instruction for heap values in instances pushed to the stack... **(WIP)**
-      - Support member and by-index access.
-      - Classes resolve to a compile-time-known mapping of slots (indices) to corresponding fields for field member accesses. At runtime, all instance objects per class will become compact clusters of values on the stack... Constructors will always emit all member-`Value` pushes before their body generation.
-      - Later add `RETURN_MULTI <instance-base-slot-id> <value-count>` to support returning classes.
+   - Add support for `MAKE_HEAP_OBJECT` emitted instructions in codegen for constructors.
+   - Add support for VM to preload heap items from `IRResult` before execution.
+   - Add support for "self" references in call frames to have proper context of method calls. **(TODO)**
  - Support flexible arrays. (0.4.0)
  - Improve error diagnostics (0.4.1)
  - Add optimization passes on IR (0.4.2)

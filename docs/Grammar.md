@@ -11,10 +11,9 @@
 
 ; EXPRS
 
-<primitive> ::= <boolean> | <char> | <int> | <float> | <varchar> | <self> | <identifier> | (<compare>)
+<primitive> ::= <boolean> | <char> | <int> | <float> | <varchar> | <identifier> | (<compare>)
 <char> ::= "\'" <NON-SINGLE-QUOTE> "\'"
 <varchar> ::= "\"" <NON-QUOTE>* "\""
-<self> ::= "self"
 
 ; TODO: add arrays later!
 

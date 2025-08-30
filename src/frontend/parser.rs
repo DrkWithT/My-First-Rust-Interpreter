@@ -133,6 +133,7 @@ impl<'pl_2> Parser<'pl_2> {
 
     fn parse_primitive(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if self.match_here([TokenType::ParenOpen]) {
+            // println!("parse_primitive ((expr))...");
             self.consume_any(items);
             let parenthesized_expr = self.parse_compare(items);
             self.consume_of([TokenType::ParenClose], items);
@@ -150,6 +151,7 @@ impl<'pl_2> Parser<'pl_2> {
             TokenType::LiteralFloat,
             TokenType::LiteralVarchar,
         ], items) {
+            // println!("parse_primitive ERROR :(");
             return None;
         }
 
@@ -161,6 +163,7 @@ impl<'pl_2> Parser<'pl_2> {
     // }
 
     fn parse_access(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_access --> parse_primitive");
         let lhs_opt = self.parse_primitive(items);
 
         lhs_opt.as_ref()?;
@@ -169,11 +172,13 @@ impl<'pl_2> Parser<'pl_2> {
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpAccess]) {
+                // println!("stopped parse_access at token of: {}", self.current().to_info_str());
                 break;
             }
 
             self.consume_any(items);
 
+            // println!("parse_access --> parse_primitive");
             let rhs_box = self.parse_primitive(items);
 
             rhs_box.as_ref()?;
@@ -187,6 +192,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_call(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_call --> parse_access");
         let callee_opt = self.parse_access(items);
 
         callee_opt.as_ref()?;
@@ -232,6 +238,7 @@ impl<'pl_2> Parser<'pl_2> {
 
     fn parse_unary(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if !self.match_here([TokenType::OpMinus]) {
+            // println!("parse_unary (no negation)...");
             return self.parse_call(items);
         }
 
@@ -243,6 +250,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_any(items);
 
+        // println!("parse_unary (negation) --> parse_call");
         let temp_inner_opt = self.parse_call(items);
 
         temp_inner_opt.as_ref()?;
@@ -251,6 +259,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_factor(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_factor...");
         let lhs_opt = self.parse_unary(items);
 
         lhs_opt.as_ref()?;
@@ -283,6 +292,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_term(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_term...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor(items);
 
         lhs_opt.as_ref()?;
@@ -315,6 +325,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_equality(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_equality...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_term(items);
 
         lhs_opt.as_ref()?;
@@ -347,6 +358,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_compare(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_compare...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality(items);
 
         lhs_opt.as_ref()?;
@@ -379,6 +391,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_assign(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_assign -> parse_access");
         let lhs_opt = self.parse_access(items);
 
         lhs_opt.as_ref()?;
@@ -389,6 +402,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_any(items);
 
+        // println!("parse_assign -> parse_compare");
         let rhs_opt = self.parse_compare(items);
 
         rhs_opt.as_ref()?;
@@ -401,6 +415,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_variable_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        // println!("parse_variable_decl...");
         self.consume_of([TokenType::Keyword], items);
 
         let var_name = *self.current();
@@ -412,6 +427,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_of([TokenType::OpAssign], items);
 
+        // println!("parse_variable_decl --> parse_compare");
         let var_init_expr_opt = self.parse_compare(items);
 
         var_init_expr_opt.as_ref()?;
@@ -677,7 +693,10 @@ impl<'pl_2> Parser<'pl_2> {
             "let" => self.parse_field_decl(items),
             "ctor" => self.parse_constructor_decl(items),
             "met" => self.parse_method_decl(items),
-            _ => None,
+            _ => {
+                self.recover_and_report("Invalid class member declaration- Only let, ctor, and met are valid for fields, a constructor, and methods are valid.", items);
+                None
+            },
         };
 
         class_decl_opt.as_deref()?;

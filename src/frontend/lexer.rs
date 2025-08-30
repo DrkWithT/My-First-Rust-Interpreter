@@ -309,7 +309,7 @@ impl<'ll_2> Lexer<'ll_2> {
             self.lex_spaces()
         } else if matchers::check_alpha(c) {
             self.lex_word(items)
-        } else if matchers::check_numeric(c) {
+        } else if matchers::check_digit(c) {
             self.lex_numbers()
         } else if matchers::check_multi(c, ['.', '+', '-', '*', '/', '!', '=', '<', '>']) {
             self.lex_operator(items)

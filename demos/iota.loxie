@@ -1,0 +1,41 @@
+# test ATOI that makes int's 0, 1, ...
+
+import stdio;
+
+class Atoi {
+    private let count: int;
+
+    public ctor() {
+        count = 0;
+        return 0;
+    }
+
+    public met next(): int {
+        let val: int = count;
+        count = val + 1;
+
+        return val;
+    }
+}
+
+fun main(): int {
+    let gen_iota: Atoi = Atoi();
+
+    let x: int = gen_iota.next();
+
+    if x != 0 {
+        return 1;
+    }
+
+    (print_val(x));
+
+    let y: int = gen_iota.next();
+
+    if y != 1 {
+        return 1;
+    }
+
+    (print_val(y));
+
+    return 0;
+}

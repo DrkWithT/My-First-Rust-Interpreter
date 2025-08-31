@@ -21,21 +21,14 @@ class Atoi {
 fun main(): int {
     let gen_iota: Atoi = Atoi();
 
-    let x: int = gen_iota.next();
+    let a: int = gen_iota.next();
+    (print_val(a));
 
-    if x != 0 {
-        return 1;
-    }
+    let b: int = gen_iota.next();
+    (print_val(b));
 
-    (print_val(x));
-
-    let y: int = gen_iota.next();
-
-    if y != 1 {
-        return 1;
-    }
-
-    (print_val(y));
+    let c: int = gen_iota.next();
+    (print_val(c));
 
     return 0;
 }

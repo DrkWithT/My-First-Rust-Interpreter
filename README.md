@@ -3,25 +3,27 @@
 ### Brief
 My second ever project in Rust. This will become a mini-language called Loxie as a very small derivative of the educational Lox language.
 
-### What Loxie Looks Like
-<img src="./docs/assets/Loxie_Lang_Highlight_1.png" width="50%" alt="disassembled bytecode of ifs case">
+### A peek at Loxie
+<img src="./docs/assets/Loxie_Lang_Highlight_1.png" width="50%" alt="fibonacci program">
 
 ### Design
  - Procedural & functional paradigm
  - Static & strong typing + null safety
- - First-class lambdas vs. declared procedures
+ - Declared procedures & classes
  - Built-in functions galore!
  - NOTE: the compiler only reads sources relative to the `loxie_lib` directory or the invoked-from directory for now.
 
 ### Feature Roadmap
- - Improve error diagnostics
- - Add optimization passes on IR
-    - Instruction substitutions
- - Support strings
- - Improve syntax highlighting on Loxie's local VSCode extension
- - Support arrays
- - Support lambdas
- - Add more standard I/O native functions!
+ - Improve error diagnostics (0.3.1)
+   - Check member access by `public / private` specifiers.
+ - Do optimizations (0.3.2)
+    - Reduce bytecode instruction representation size... maybe use `i16` vs. `i32`?
+    - Instruction substitution passes on IR (strength reduction)
+ - Support flexible arrays. (0.4.0)
+ - Add more standard I/O native functions! (0.4.1)
+ - Improve syntax highlighting on Loxie's local VSCode extension:
+   - Add these keywords: `ctor`, `class`, `private`, `public`, `met`
+   - Add these typenames: `char`, `varchar`
 
 ### Other Docs
  - [Grammar Info](./docs/Grammar.md)

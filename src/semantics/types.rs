@@ -4,8 +4,10 @@ pub enum PrimitiveTag {
     Unknown,
     Any,
     Boolean,
+    Char,
     Integer,
-    Floating
+    Floating,
+    Varchar,
 }
 
 #[repr(i32)]
@@ -130,8 +132,10 @@ impl TypeKind for PrimitiveInfo {
         match temp_tag {
             PrimitiveTag::Any => String::from("any"),
             PrimitiveTag::Boolean => String::from("bool"),
+            PrimitiveTag::Char => String::from("char"),
             PrimitiveTag::Integer => String::from("int"),
             PrimitiveTag::Floating => String::from("float"),
+            PrimitiveTag::Varchar => String::from("varchar"),
             _ => String::from("unknown"),
         }
     }
@@ -211,3 +215,42 @@ impl TypeKind for FunctionInfo {
         result
     }
 }
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq)]
+pub enum ClassAccess {
+    Public,
+    Private,
+}
+
+pub struct ClassInfo {
+    class_name: String,
+}
+
+impl ClassInfo {
+    pub fn new(class_name_arg: String) -> Self {
+        Self {
+            class_name: class_name_arg
+        }
+    }
+}
+
+impl TypeKind for ClassInfo {
+    fn is_primitive(&self) -> bool {
+        false
+    }
+
+    fn is_sequence(&self) -> bool {
+        false
+    }
+
+    fn is_callable(&self) -> bool {
+        false
+    }
+
+    fn typename(&self) -> String {
+        self.class_name.clone()
+    }
+}
+
+

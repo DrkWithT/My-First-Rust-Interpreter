@@ -2,6 +2,7 @@ use std::collections::{HashSet, VecDeque};
 
 use crate::codegen::ir::*;
 use crate::vm::bytecode::{self, ArgMode};
+use crate::vm::heap::HeapValue;
 use crate::vm::value::Value;
 
 struct PatchEntry {
@@ -28,10 +29,10 @@ fn convert_ir_arg_tag(arg: Region) -> ArgMode {
         Region::Immediate => ArgMode::ConstantId,
         Region::TempStack => ArgMode::StackOffset,
         Region::ArgStore => ArgMode::ArgumentId,
-        // Region::ObjectHeap => ArgMode::HeapId,
+        Region::ObjectHeap => ArgMode::HeapId,
+        Region::Field => ArgMode::InstanceFieldId,
         Region::Functions => ArgMode::ProcedureId,
         Region::Natives => ArgMode::NativeId,
-        // Region::BlockId => ArgMode::Foo,
         Region::BlockId => ArgMode::CodeOffset,
         _ => ArgMode::Dud,
     }
@@ -158,6 +159,10 @@ impl BytecodeEmitter {
             Opcode::GenPatchBack => {
                 self.apply_patch();
             },
+            Opcode::Leave => {
+                self.temp_instructions
+                    .push(bytecode::Instruction::Leave);
+            },
             _ => {
                 eprintln!("GenError: invalid nonary variant.");
                 return false;
@@ -178,6 +183,14 @@ impl BytecodeEmitter {
             Opcode::Push => {
                 self.temp_instructions
                     .push(bytecode::Instruction::Push(converted_arg_0));
+            },
+            Opcode::MakeHeapValue => {
+                self.temp_instructions
+                    .push(bytecode::Instruction::MakeHeapValue(converted_arg_0));
+            },
+            Opcode::MakeHeapObject => {
+                self.temp_instructions
+                    .push(bytecode::Instruction::MakeHeapObject(converted_arg_0));
             },
             Opcode::Neg => {
                 self.temp_instructions
@@ -265,6 +278,23 @@ impl BytecodeEmitter {
         true
     }
 
+    fn emit_ternary_step_code(&mut self, ir_op: Opcode, arg_0: Locator, arg_1: Locator, arg_2: Locator) -> bool {
+        let converted_arg_0 = (convert_ir_arg_tag(arg_0.0), arg_0.1);
+        let converted_arg_1 = (convert_ir_arg_tag(arg_1.0), arg_1.1);
+        let converted_arg_2 = (convert_ir_arg_tag(arg_2.0), arg_2.1);
+
+        match ir_op {
+            Opcode::InstanceCall => {
+                self.temp_instructions.push(bytecode::Instruction::InstanceCall(converted_arg_0, converted_arg_1, converted_arg_2));
+            },
+            _ => {
+                return false;
+            },
+        }
+
+        true
+    }
+
     fn emit_ir_block_code(&mut self, ir_block: &Node) -> (bool, i32, i32) {
         for temp_instr in ir_block.get_steps() {
             if !match temp_instr {
@@ -272,6 +302,9 @@ impl BytecodeEmitter {
                 Instruction::Unary(op, arg_0) => self.emit_unary_step_code(*op, arg_0.clone()),
                 Instruction::Binary(op, arg_0, arg_1) => {
                     self.emit_binary_step_code(*op, arg_0.clone(), arg_1.clone())
+                },
+                Instruction::Ternary(op, arg_0, arg_1, arg_2) => {
+                    self.emit_ternary_step_code(*op, arg_0.clone(), arg_1.clone(), arg_2.clone())
                 }
             } {
                 eprintln!("GenError: Unknown instruction variant.");
@@ -340,6 +373,7 @@ impl BytecodeEmitter {
         cfg_list: &CFGStorage,
         temp_consts: &mut [Vec<Value>],
         main_fun_id: i32,
+        temp_heap_preloadables: &mut Vec<HeapValue>
     ) -> Option<bytecode::Program> {
         let cfg_count = cfg_list.len() as i32;
         let mut temp_procedures = Vec::<bytecode::Procedure>::new();
@@ -352,9 +386,12 @@ impl BytecodeEmitter {
 
             temp_chunk.as_ref()?;
 
+            println!("loaded bytecode of proc-CFG #{cfg_id}");
             temp_procedures.push(bytecode::Procedure::new(temp_chunk.unwrap(), cfg_id));
         }
 
-        Some(bytecode::Program::new(temp_procedures, main_fun_id))
+        let moved_preloadables = std::mem::take(temp_heap_preloadables);
+
+        Some(bytecode::Program::new(temp_procedures, moved_preloadables, main_fun_id))
     }
 }

@@ -1,5 +1,5 @@
 #[repr(i32)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum TokenType {
     Unknown,
     Spaces,
@@ -8,9 +8,10 @@ pub enum TokenType {
     Typename,
     Identifier,
     LiteralBool,
+    LiteralChar,
     LiteralInt,
     LiteralFloat,
-    // LiteralString,
+    LiteralVarchar,
     OpAccess,
     OpTimes,
     OpSlash,
@@ -34,57 +35,50 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &'static str {
         match self {
-            Self::Unknown => String::from("Unknown"),
-            Self::Spaces => String::from("Spaces"),
-            Self::Comment => String::from("Comment"),
-            Self::Keyword => String::from("Keyword"),
-            Self::Typename => String::from("Typename"),
-            Self::Identifier => String::from("Identifier"),
-            Self::LiteralBool => String::from("LiteralBool"),
-            Self::LiteralInt => String::from("LiteralInt"),
-            Self::LiteralFloat => String::from("LiteralFloat"),
-            // LiteralString,
-            Self::OpAccess => String::from("OpAccess"),
-            Self::OpTimes => String::from("OpTimes"),
-            Self::OpSlash => String::from("OpSlash"),
-            Self::OpPlus => String::from("OpPlus"),
-            Self::OpMinus => String::from("OpMinus"),
-            Self::OpEquality => String::from("OpEquality"),
-            Self::OpInequality => String::from("OpInequality"),
-            Self::OpLessThan => String::from("OpLessThan"),
-            Self::OpGreaterThan => String::from("OpGreaterThan"),
-            Self::OpAssign => String::from("OpAssign"),
-            Self::Colon => String::from("Colon"),
-            Self::Comma => String::from("Comma"),
-            Self::Semicolon => String::from("Semicolon"),
-            Self::ParenOpen => String::from("ParenOpen"),
-            Self::ParenClose => String::from("ParenClose"),
-            Self::BraceOpen => String::from("BraceOpen"),
-            Self::BraceClose => String::from("BraceClose"),
-            Self::BracketOpen => String::from("BracketOpen"),
-            Self::BracketClose => String::from("BracketClose"),
-            Self::Eof => String::from("Eof"),
+            Self::Unknown => "Unknown",
+            Self::Spaces => "Spaces",
+            Self::Comment => "Comment",
+            Self::Keyword => "Keyword",
+            Self::Typename => "Typename",
+            Self::Identifier => "Identifier",
+            Self::LiteralBool => "LiteralBool",
+            Self::LiteralChar => "LiteralChar",
+            Self::LiteralInt => "LiteralInt",
+            Self::LiteralFloat => "LiteralFloat",
+            Self::LiteralVarchar => "LiteralVarchar",
+            Self::OpAccess => "OpAccess",
+            Self::OpTimes => "OpTimes",
+            Self::OpSlash => "OpSlash",
+            Self::OpPlus => "OpPlus",
+            Self::OpMinus => "OpMinus",
+            Self::OpEquality => "OpEquality",
+            Self::OpInequality => "OpInequality",
+            Self::OpLessThan => "OpLessThan",
+            Self::OpGreaterThan => "OpGreaterThan",
+            Self::OpAssign => "OpAssign",
+            Self::Colon => "Colon",
+            Self::Comma => "Comma",
+            Self::Semicolon => "Semicolon",
+            Self::ParenOpen => "ParenOpen",
+            Self::ParenClose => "ParenClose",
+            Self::BraceOpen => "BraceOpen",
+            Self::BraceClose => "BraceClose",
+            Self::BracketOpen => "BracketOpen",
+            Self::BracketClose => "BracketClose",
+            Self::Eof => "Eof",
         }
     }
 }
 
-impl Copy for TokenType {
-    // NOTE: this impl is a required dud to make the int32-based enum copyable.
-}
-
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Token {
     pub tag: TokenType,
     pub start: usize,
     pub length: usize,
     pub line_no: usize,
     pub col_no: usize,
-}
-
-impl Copy for Token {
-    // NOTE: This is a dud for implementing copy operations for Token.
 }
 
 impl Token {

@@ -7,8 +7,7 @@ use std::{
 
 use crate::{
     codegen::{
-        bytecode_emitter::BytecodeEmitter,
-        ir_emitter::{IREmitter, IRResult},
+        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}, ir_printer::print_cfg
     },
     frontend::{
         ast::Stmt, lexer::Lexer, parser::Parser, token::TokenType
@@ -117,7 +116,16 @@ impl<'cml_2> CompilerMain<'cml_2> {
     fn step_sema(&mut self, full_ast: &VecDeque<SourceIndexedAST>, srcs_table: &HashMap<i32, String>) -> bool {
         for (temp_ast_src_idx, temp_ast) in full_ast {
             self.semanator.reset_source(srcs_table.get(temp_ast_src_idx).unwrap().clone());
-            if !self.semanator.check_fun_ast(temp_ast.as_ref()) {
+            if !self.semanator.check_top_ast(temp_ast.as_ref()) {
+                return false;
+            }
+        }
+
+        self.semanator.clear_preprocess_decls_flag();
+
+        for (temp_ast_src_idx, temp_ast) in full_ast {
+            self.semanator.reset_source(srcs_table.get(temp_ast_src_idx).unwrap().clone());
+            if !self.semanator.check_top_ast(temp_ast.as_ref()) {
                 return false;
             }
         }
@@ -126,34 +134,53 @@ impl<'cml_2> CompilerMain<'cml_2> {
     }
 
     fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
-        self.ir_emitter.emit_all_ir(full_ast)
+        let ir_opt = self.ir_emitter.emit_all_ir(full_ast);
+
+        if let Some(complete_ir) = &ir_opt {   
+            println!("Found CFGs:\n");
+            for fun_cfg in &complete_ir.0 {
+                print_cfg(fun_cfg);
+            }
+        }
+
+        ir_opt
     }
 
     fn step_bc_emit(&mut self, full_ir: &mut IRResult) -> Option<bytecode::Program> {
-        let (full_cfg_list, full_const_groups, main_id) = full_ir;
+        let (full_cfg_list, full_const_groups, main_id, heap_preloadables) = full_ir;
 
-        self.bc_emitter.generate_bytecode(full_cfg_list, full_const_groups, *main_id)
+        self.bc_emitter.generate_bytecode(full_cfg_list, full_const_groups, *main_id, heap_preloadables)
     }
 
     pub fn compile_from_start(&mut self, lexicals: HashMap<String, TokenType>) -> Option<bytecode::Program> {
         let full_program_ast_opt = self.step_parse(lexicals);
 
-        full_program_ast_opt.as_ref()?;
+        if full_program_ast_opt.is_none() {
+            eprintln!("CompileError: parsing failed.");
+            return None;
+        }
 
         let (full_asts, full_src_table) = full_program_ast_opt.unwrap();
 
         if !self.step_sema(&full_asts, &full_src_table) {
+            eprintln!("CompileError: found an unknown semantic error.");
             return None;
         }
 
         let full_program_ir_opt = self.step_ir_emit(&full_asts);
 
-        full_program_ir_opt.as_ref()?;
+        if full_program_ir_opt.is_none() {
+            eprintln!("CompileError: failed to emit IR.");
+            return None;
+        }
 
         let mut full_program_ir = full_program_ir_opt.unwrap();
 
-        // disassemble_program(&temp_bc);
+        let temp_bc = self.step_bc_emit(&mut full_program_ir);
 
-        self.step_bc_emit(&mut full_program_ir)
+        disassemble_program(temp_bc.as_ref().unwrap());
+
+        // TODO: replace the None below with temp_bc once codegen seems okay!
+        temp_bc
     }
 }

@@ -72,9 +72,7 @@ impl<'ll_2> Lexer<'ll_2> {
             return '\0';
         }
 
-        let symbol_expect_msg = format!("Could not peek symbol at {raw_src_pos}");
-        
-        self.source.chars().nth(raw_src_pos).expect(&symbol_expect_msg)
+        self.source.chars().nth(raw_src_pos).expect("Could not peek symbol at {raw_src_pos}")
     }
 
     fn update_source_location(&mut self, c: char) {
@@ -179,6 +177,40 @@ impl<'ll_2> Lexer<'ll_2> {
         )
     }
 
+    fn lex_char(&mut self) -> Token {
+        // Skip first '\'' symbol here
+        self.update_source_location(self.peek_off(0));
+        self.pos += 1;
+
+        let temp_start = self.pos;
+        let mut temp_len: usize = 0;
+        let temp_line = self.line;
+        let temp_column = self.column;
+        let mut escapes = 0;
+        let mut closed = false;
+
+        while !self.at_end() {
+            let s = self.peek_off(0);
+            self.update_source_location(s);
+            self.pos += 1;
+
+            if s == '\'' {
+                closed = true;
+                break;
+            }
+
+            if s == '\\' {
+                escapes += 1;
+            }
+
+            temp_len += 1;
+        }
+
+        let temp_tag = if escapes <= 1 && closed { TokenType::LiteralChar } else { TokenType::Unknown };
+
+        token_from!(temp_tag, temp_start, temp_len, temp_line, temp_column)
+    }
+
     fn lex_numbers(&mut self) -> Token {
         let temp_start = self.pos;
         let mut temp_len: usize = 0;
@@ -207,6 +239,35 @@ impl<'ll_2> Lexer<'ll_2> {
             1 => token_from!(TokenType::LiteralFloat, temp_start, temp_len, temp_line, temp_column),
             _ => token_from!(TokenType::Unknown, temp_start, temp_len, temp_line, temp_column)
         }
+    }
+
+    fn lex_string(&mut self) -> Token {
+        self.update_source_location(self.peek_off(0));
+        self.pos += 1;
+
+        let temp_start = self.pos;
+        let mut temp_len: usize = 0;
+        let temp_line = self.line;
+        let temp_column = self.column;
+        let mut closed = false;
+
+        while !self.at_end() {
+            let s = self.peek_off(0);
+
+            self.update_source_location(s);
+            self.pos += 1;
+
+            if s == '\"' {
+                closed = true;
+                break;
+            }
+
+            temp_len += 1;
+        }
+
+        let temp_tag = if closed { TokenType::LiteralVarchar } else { TokenType::Unknown };
+
+        token_from!(temp_tag, temp_start, temp_len, temp_line, temp_column)
     }
 
     fn lex_operator(&mut self, items: &'ll_2 HashMap<String, TokenType>) -> Token {
@@ -248,7 +309,7 @@ impl<'ll_2> Lexer<'ll_2> {
             self.lex_spaces()
         } else if matchers::check_alpha(c) {
             self.lex_word(items)
-        } else if matchers::check_numeric(c) {
+        } else if matchers::check_digit(c) {
             self.lex_numbers()
         } else if matchers::check_multi(c, ['.', '+', '-', '*', '/', '!', '=', '<', '>']) {
             self.lex_operator(items)
@@ -272,6 +333,8 @@ impl<'ll_2> Lexer<'ll_2> {
 
         match next_symbol {
             '#' => self.lex_comment(),
+            '\'' => self.lex_char(),
+            '\"' => self.lex_string(),
             ':' => self.lex_single(TokenType::Colon),
             ',' => self.lex_single(TokenType::Comma),
             ';' => self.lex_single(TokenType::Semicolon),

@@ -8,17 +8,29 @@ pub type RawDataValue = (i32, ValueCategoryTag);
 /// See `SemanticNote::Callable`
 pub type RawCallable<'a> = (&'a Vec<i32>, i32, i32);
 
+/// See `SemanticNote::Method`
+pub type RawMethodCallable<'a2> = (&'a2 Vec<i32>, i32, i32, i32);
+
 /// Stores the following semantic info per expr / decl: type-index, value category
 #[derive(Clone, PartialEq)]
 pub enum SemanticNote {
     /// contains no info
     Dud,
 
-    /// contains type-index & value category info
+    /// contains temporary and variable info: type-index & value category info
     DataValue(i32, ValueCategoryTag),
-    
-    /// contains function-type-index, function-return-type-index, and arity info
+
+    /// contains top-level function info: function-arg-type-indexes, function-return-type-index, and arity info
     Callable(Vec<i32>, i32, i32),
+
+    /// contains brief class info (without its internals): class-type-id
+    ClassEntity(i32, ValueCategoryTag),
+
+    /// contains constructor info: arg-type-indexes, class-type-id, arity
+    Constructor(Vec<i32>, i32, i32),
+
+    /// contains class method info: arg-type-indexes, return-type-index, arity, class-type-id
+    Method(Vec<i32>, i32, i32, i32),
 }
 
 impl SemanticNote {
@@ -39,8 +51,24 @@ impl SemanticNote {
     }
 
     pub fn try_unbox_callable_info(&self) -> Option<RawCallable> {
-        if let SemanticNote::Callable(full_type_id, result_type_id, arity_n) = self {
-            return Some((full_type_id, *result_type_id, *arity_n));
+        match self {
+            Self::Callable(full_type_id, result_type_id, arity_n) => Some((full_type_id, *result_type_id, *arity_n)),
+            Self::Constructor(args_type_ids, class_type_id, arity) => Some((args_type_ids, *class_type_id, *arity,)),
+            _ => None,
+        }
+    }
+
+    pub fn try_unbox_method_info(&self) -> Option<RawMethodCallable> {
+        if let Self::Method(arg_type_ids, ret_type_id, arity, class_type_id) = self {
+            return Some((arg_type_ids, *ret_type_id, *arity, *class_type_id));
+        }
+
+        None
+    }
+
+    pub fn try_unbox_class_info_id(&self) -> Option<i32> {
+        if let Self::ClassEntity(entity_id, _) = self {
+            return Some(*entity_id);
         }
 
         None

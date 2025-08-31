@@ -17,3 +17,9 @@ This is a gallery showing all developmental milestones of Loxie.
 
 #### Image:
 <img src="./assets/Loxie_Sum_Program.png" width="25%" alt="disassembled bytecode of ifs case">
+
+### Major Language Update 2 (`iota.loxie`)
+ - Added support for simple classes (no inheritance or polymorphism yet).
+
+#### Image:
+<img src="./assets/Loxie_Iota.png" width="25%" alt="disassembled bytecode of ifs case">

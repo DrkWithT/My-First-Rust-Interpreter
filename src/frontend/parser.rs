@@ -122,15 +122,18 @@ impl<'pl_2> Parser<'pl_2> {
 
         match typename_lexeme {
             "bool" => Box::new(PrimitiveInfo::new(PrimitiveTag::Boolean)),
+            "char" => Box::new(PrimitiveInfo::new(PrimitiveTag::Char)),
             "int" => Box::new(PrimitiveInfo::new(PrimitiveTag::Integer)),
             "float" => Box::new(PrimitiveInfo::new(PrimitiveTag::Floating)),
+            "varchar" => Box::new(PrimitiveInfo::new(PrimitiveTag::Varchar)),
             "any" => Box::new(PrimitiveInfo::new(PrimitiveTag::Any)),
-            _ => Box::new(PrimitiveInfo::new(PrimitiveTag::Unknown)),
+            _ => Box::new(ClassInfo::new(String::from(typename_lexeme))),
         }
     }
 
     fn parse_primitive(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if self.match_here([TokenType::ParenOpen]) {
+            // println!("parse_primitive ((expr))...");
             self.consume_any(items);
             let parenthesized_expr = self.parse_compare(items);
             self.consume_of([TokenType::ParenClose], items);
@@ -141,18 +144,26 @@ impl<'pl_2> Parser<'pl_2> {
         let token_copy = *self.current();
 
         if !self.consume_of([
+            TokenType::Identifier,
             TokenType::LiteralBool,
+            TokenType::LiteralChar,
             TokenType::LiteralInt,
             TokenType::LiteralFloat,
-            TokenType::Identifier,
+            TokenType::LiteralVarchar,
         ], items) {
+            // println!("parse_primitive ERROR :(");
             return None;
         }
 
         Some(Box::new(Primitive::new(token_copy)))
     }
 
+    // fn parse_atom(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // TODO ...
+    // }
+
     fn parse_access(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_access --> parse_primitive");
         let lhs_opt = self.parse_primitive(items);
 
         lhs_opt.as_ref()?;
@@ -161,11 +172,13 @@ impl<'pl_2> Parser<'pl_2> {
 
         while !self.at_eof() {
             if !self.match_here([TokenType::OpAccess]) {
+                // println!("stopped parse_access at token of: {}", self.current().to_info_str());
                 break;
             }
 
             self.consume_any(items);
 
+            // println!("parse_access --> parse_primitive");
             let rhs_box = self.parse_primitive(items);
 
             rhs_box.as_ref()?;
@@ -179,6 +192,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_call(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_call --> parse_access");
         let callee_opt = self.parse_access(items);
 
         callee_opt.as_ref()?;
@@ -224,6 +238,7 @@ impl<'pl_2> Parser<'pl_2> {
 
     fn parse_unary(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         if !self.match_here([TokenType::OpMinus]) {
+            // println!("parse_unary (no negation)...");
             return self.parse_call(items);
         }
 
@@ -235,6 +250,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_any(items);
 
+        // println!("parse_unary (negation) --> parse_call");
         let temp_inner_opt = self.parse_call(items);
 
         temp_inner_opt.as_ref()?;
@@ -243,6 +259,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_factor(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_factor...");
         let lhs_opt = self.parse_unary(items);
 
         lhs_opt.as_ref()?;
@@ -275,6 +292,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_term(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_term...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_factor(items);
 
         lhs_opt.as_ref()?;
@@ -307,6 +325,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_equality(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_equality...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_term(items);
 
         lhs_opt.as_ref()?;
@@ -339,6 +358,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_compare(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_compare...");
         let lhs_opt: Option<Box<dyn Expr>> = self.parse_equality(items);
 
         lhs_opt.as_ref()?;
@@ -371,6 +391,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_assign(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
+        // println!("parse_assign -> parse_access");
         let lhs_opt = self.parse_access(items);
 
         lhs_opt.as_ref()?;
@@ -381,6 +402,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_any(items);
 
+        // println!("parse_assign -> parse_compare");
         let rhs_opt = self.parse_compare(items);
 
         rhs_opt.as_ref()?;
@@ -393,6 +415,7 @@ impl<'pl_2> Parser<'pl_2> {
     }
 
     fn parse_variable_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        // println!("parse_variable_decl...");
         self.consume_of([TokenType::Keyword], items);
 
         let var_name = *self.current();
@@ -404,6 +427,7 @@ impl<'pl_2> Parser<'pl_2> {
 
         self.consume_of([TokenType::OpAssign], items);
 
+        // println!("parse_variable_decl --> parse_compare");
         let var_init_expr_opt = self.parse_compare(items);
 
         var_init_expr_opt.as_ref()?;
@@ -602,6 +626,110 @@ impl<'pl_2> Parser<'pl_2> {
         )))
     }
 
+    fn parse_field_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let field_name_token = *self.current();
+
+        self.consume_of([TokenType::Identifier], items);
+        self.consume_of([TokenType::Colon], items);
+
+        let field_typing = self.parse_type(items);
+
+        self.consume_of([TokenType::Semicolon], items);
+
+        Some(Box::new(FieldDecl::new(
+            field_name_token, field_typing
+        )))
+    }
+
+    fn parse_constructor_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let ctor_params = self.parse_function_params(items);
+
+        let ctor_body = self.parse_block(items);
+
+        ctor_body.as_deref()?;
+
+        Some(Box::new(ConstructorDecl::new(
+            ctor_params,
+            ctor_body.unwrap(),
+        )))
+    }
+
+    fn parse_method_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let method_name_token = *self.current();
+        self.consume_of([TokenType::Identifier], items);
+
+        let method_params = self.parse_function_params(items);
+
+        self.consume_of([TokenType::Colon], items);
+        let method_type_box = self.parse_type(items);
+
+        let method_body_opt = self.parse_block(items);
+
+        method_body_opt.as_ref()?;
+
+        Some(Box::new(MethodDecl::new(
+            method_name_token,
+            method_params,
+            method_type_box,
+            method_body_opt.unwrap(),
+        )))
+    }
+
+    fn parse_class_member(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<ClassMemberDecl> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let access_modify_word = self.previous().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("private");
+        let access_modify_enum = if access_modify_word == "public" { ClassAccess::Public } else { ClassAccess::Private };
+
+        let hint_keyword = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
+
+        let class_decl_opt = match hint_keyword {
+            "let" => self.parse_field_decl(items),
+            "ctor" => self.parse_constructor_decl(items),
+            "met" => self.parse_method_decl(items),
+            _ => {
+                self.recover_and_report("Invalid class member declaration- Only let, ctor, and met are valid for fields, a constructor, and methods are valid.", items);
+                None
+            },
+        };
+
+        class_decl_opt.as_deref()?;
+
+        Some((
+            class_decl_opt.unwrap(),
+            access_modify_enum
+        ))
+    }
+
+    fn parse_class_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Stmt>> {
+        self.consume_of([TokenType::Keyword], items);
+
+        let class_typename = self.parse_type(items);
+        let mut class_members = Vec::<ClassMemberDecl>::new();
+
+        self.consume_of([TokenType::BraceOpen], items);
+
+        while !self.at_eof() {
+            if self.match_here([TokenType::BraceClose]) {
+                self.consume_any(items);
+                break;
+            }
+
+            let temp_member_stmt = self.parse_class_member(items);
+            temp_member_stmt.as_ref()?;
+
+            class_members.push(temp_member_stmt.unwrap());
+        }
+
+        Some(Box::new(ClassDecl::new(class_members, class_typename)))
+    }
+
     fn parse_param_decl(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> ParamDecl {
         let name_token = *self.current();
         self.consume_of([TokenType::Identifier], items);
@@ -645,6 +773,7 @@ impl<'pl_2> Parser<'pl_2> {
             "import" => self.parse_import(items),
             "foreign" => self.parse_foreign_stub(items),
             "fun" => self.parse_function_decl(items),
+            "class" => self.parse_class_decl(items),
             _ => None
         }
     }

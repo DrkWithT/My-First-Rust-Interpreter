@@ -10,6 +10,8 @@ fn format_locator(loc: &Locator) -> String {
         Region::TempStack => format!("temp_off:{}", *loc_id),
         Region::ArgStore => format!("args:{}", *loc_id),
         Region::ObjectHeap => format!("object:{}", *loc_id),
+        Region::Field => format!("self_field:{}", *loc_id),
+        Region::Methods => format!("self_method:{}", *loc_id),
         Region::Functions => format!("function:{}", *loc_id),
         Region::Natives => format!("natives:{}", *loc_id),
         Region::BlockId => format!("block:{}", *loc_id),
@@ -38,7 +40,16 @@ fn print_ir_node(node: &Node, id: i32) -> bool {
                     format_locator(arg_0),
                     format_locator(arg_1)
                 );
-            }
+            },
+            Instruction::Ternary(op, arg_0, arg_1, arg_2) => {
+                println!(
+                    "{} {} {} {}",
+                    op.get_name(),
+                    format_locator(arg_0),
+                    format_locator(arg_1),
+                    format_locator(arg_2),
+                );
+            },
         }
     }
 

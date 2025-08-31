@@ -1,6 +1,6 @@
 use crate::codegen::ir::Locator;
 use crate::frontend::token::{Token, TokenType};
-use crate::semantics::types;
+use crate::semantics::types::{self, ClassAccess};
 use crate::semantics::scope::SemanticNote;
 
 pub struct ParamDecl {
@@ -234,6 +234,10 @@ pub trait StmtVisitor<Res> {
     fn visit_import(&mut self, s: &Import) -> Res;
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> Res;
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> Res;
+    fn visit_field_decl(&mut self, s: &FieldDecl) -> Res;
+    fn visit_constructor_decl(&mut self, s: &ConstructorDecl) -> Res;
+    fn visit_method_decl(&mut self, s: &MethodDecl) -> Res;
+    fn visit_class_decl(&mut self, s: &ClassDecl) -> Res;
     fn visit_block(&mut self, s: &Block) -> Res;
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> Res;
     fn visit_if(&mut self, s: &If) -> Res;
@@ -337,12 +341,7 @@ pub struct FunctionDecl {
 }
 
 impl FunctionDecl {
-    pub fn new(
-        name_token: Token,
-        params: Vec<ParamDecl>,
-        result_typing: Box<dyn types::TypeKind>,
-        body: Box<dyn Stmt>,
-    ) -> Self {
+    pub fn new(name_token: Token, params: Vec<ParamDecl>, result_typing: Box<dyn types::TypeKind>, body: Box<dyn Stmt>) -> Self {
         Self {
             name_token,
             params,
@@ -383,6 +382,181 @@ impl Stmt for FunctionDecl {
 
     fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
         v.visit_function_decl(self)
+    }
+}
+
+pub struct FieldDecl {
+    name_token: Token,
+    field_type: Box<dyn types::TypeKind>,
+}
+
+impl FieldDecl {
+    pub fn new(name_token_arg: Token, field_type_arg: Box<dyn types::TypeKind>) -> Self {
+        Self {
+            name_token: name_token_arg,
+            field_type: field_type_arg,
+        }
+    }
+
+    pub fn get_name_token(&self) -> &Token {
+        &self.name_token
+    }
+
+    pub fn get_type(&self) -> &dyn types::TypeKind {
+        &*self.field_type
+    }
+}
+
+impl Stmt for FieldDecl {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_field_decl(self)
+    }
+}
+
+pub struct ConstructorDecl {
+    params: Vec<ParamDecl>,
+    body: Box<dyn Stmt>,
+}
+
+impl ConstructorDecl {
+    pub fn new(params_arg: Vec<ParamDecl>, body_arg: Box<dyn Stmt>) -> Self {
+        Self {
+            params: params_arg,
+            body: body_arg,
+        }
+    }
+
+    pub fn get_params(&self) -> &Vec<ParamDecl> {
+        &self.params
+    }
+
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
+    }
+}
+
+impl Stmt for ConstructorDecl {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_constructor_decl(self)
+    }
+}
+
+/// **NOTE:** This duplicates class member function (method) representation to make its visitation less ambiguous and simplify visitation logic.
+pub struct MethodDecl {
+    name_token: Token,
+    params: Vec<ParamDecl>,
+    result_typing: Box<dyn types::TypeKind>,
+    body: Box<dyn Stmt>,
+}
+
+impl MethodDecl {
+    pub fn new(name_token: Token, params: Vec<ParamDecl>, result_typing: Box<dyn types::TypeKind>, body: Box<dyn Stmt>) -> Self {
+        Self {
+            name_token,
+            params,
+            result_typing,
+            body,
+        }
+    }
+
+    pub fn get_name_token(&self) -> &Token {
+        &self.name_token
+    }
+
+    pub fn get_params(&self) -> &Vec<ParamDecl> {
+        &self.params
+    }
+
+    pub fn get_result_type(&self) -> &dyn types::TypeKind {
+        &*self.result_typing
+    }
+
+    pub fn get_body(&self) -> &dyn Stmt {
+        &*self.body
+    }
+}
+
+impl Stmt for MethodDecl {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_method_decl(self)
+    }
+}
+
+pub type ClassMemberDecl = (Box<dyn Stmt>, ClassAccess);
+
+pub struct ClassDecl {
+    members: Vec<ClassMemberDecl>,
+    named_type: Box<dyn types::TypeKind>,
+}
+
+impl ClassDecl {
+    pub fn new(members_arg: Vec<ClassMemberDecl>, named_type_arg: Box<dyn types::TypeKind>) -> Self {
+        Self {
+            members: members_arg,
+            named_type: named_type_arg,
+        }
+    }
+
+    pub fn get_members(&self) -> &Vec<ClassMemberDecl> {
+        &self.members
+    }
+
+    pub fn get_class_type(&self) -> &dyn types::TypeKind {
+        &*self.named_type
+    }
+}
+
+impl Stmt for ClassDecl {
+    fn is_directive(&self) -> bool {
+        false
+    }
+
+    fn is_declaration(&self) -> bool {
+        true
+    }
+
+    fn is_expr_stmt(&self) -> bool {
+        false
+    }
+
+    fn accept_visitor(&self, v: &mut dyn StmtVisitor<bool>) -> bool {
+        v.visit_class_decl(self)
     }
 }
 

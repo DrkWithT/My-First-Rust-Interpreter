@@ -9,10 +9,7 @@ pub enum Value {
     Float(f32),
 
     /// References a handle to an interned `varchar` / other heap typed value.
-    HeapRef(i16),
-
-    /// Contains an object's type ID & heap ID.
-    ObjectRef(i16, i16),
+    HeapRef(i32),
 }
 
 impl Display for Value {
@@ -22,8 +19,8 @@ impl Display for Value {
             Self::Char(c) => write!(f, "'{}'", *c),
             Self::Int(value) => write!(f, "{}", *value),
             Self::Float(value) => write!(f, "{}", *value),
-            Self::HeapRef(id) => write!(f, "varchar-{}", *id),
-            _ => write!(f, "none"),
+            Self::HeapRef(id) => write!(f, "object-{}", *id),
+            _ => write!(f, "(empty)"),
         }
     }
 }
@@ -73,7 +70,6 @@ impl Value {
             Self::Int(_) => 3,
             Self::Float(_) => 4,
             Self::HeapRef(_) => 5,
-            Self::ObjectRef(type_id, _) => *type_id as i32,
         }
     }
 
@@ -82,13 +78,13 @@ impl Value {
     }
 
     pub fn is_same_ref(&self, other: &Self) -> bool {
-        let self_heap_id = if let Self::ObjectRef(_, heap_id) = self {
+        let self_heap_id = if let Self::HeapRef(heap_id) = self {
             *heap_id
         } else {
-            -1i16
+            -1
         };
 
-        let other_heap_id = if let Self::ObjectRef(_, rhs_heap_id) = *other {
+        let other_heap_id = if let Self::HeapRef(rhs_heap_id) = *other {
             rhs_heap_id
         } else {
             -1
@@ -105,7 +101,6 @@ impl Value {
             Self::Int(value) => *value != 0,
             Self::Float(value) => *value != 0.0f32,
             Self::HeapRef(id) => *id != -1,
-            Self::ObjectRef(_, heap_id) => *heap_id != -1,
         }
     }
 

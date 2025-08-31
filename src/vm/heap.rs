@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, fmt::{Display, Formatter}, fmt::Result};
 
 use crate::vm::value::Value;
 
@@ -125,6 +125,25 @@ impl HeapValue {
     }
 }
 
+impl Display for HeapValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Self::Empty() => write!(f, "HeapValue(empty)"),
+            Self::Varchar(s_val) => write!(f, "HeapValue('{s_val}')"),
+            Self::Instance(vals) => {
+                let mut building_str = String::default();
+
+                for field_val in vals {
+                    let field_text = field_val.to_string();
+                    building_str.push_str(&field_text);
+                }
+
+                write!(f, "{building_str}")
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct HeapCell {
     value: HeapValue,
@@ -161,12 +180,12 @@ impl HeapCell {
 }
 
 pub struct ObjectHeap {
-    free_list: VecDeque<i16>,
+    free_list: VecDeque<i32>,
     entries: Vec<HeapCell>,
     overhead_limit: usize,
     overhead: usize,
-    slot_limit: i16,
-    next_id: i16,
+    slot_limit: i32,
+    next_id: i32,
 }
 
 impl ObjectHeap {
@@ -174,12 +193,15 @@ impl ObjectHeap {
         let checked_max_overhead: usize = if max_overhead <= MAX_HEAP_OVERHEAD { max_overhead } else { MAX_HEAP_OVERHEAD };
         let calculated_slot_n = 1 + checked_max_overhead / TOTAL_STRING_OVERHEAD;
 
+        let mut temp_entries = Vec::<HeapCell>::with_capacity(calculated_slot_n);
+        temp_entries.resize(calculated_slot_n, HeapCell::new(HeapValue::Empty()));
+
         Self {
-            free_list: VecDeque::<i16>::new(),
-            entries: Vec::<HeapCell>::with_capacity(calculated_slot_n),
+            free_list: VecDeque::<i32>::new(),
+            entries: temp_entries,
             overhead_limit: max_overhead,
             overhead: 0,
-            slot_limit: calculated_slot_n as i16,
+            slot_limit: calculated_slot_n as i32,
             next_id: 0,
         }
     }
@@ -188,8 +210,9 @@ impl ObjectHeap {
         self.overhead > self.overhead_limit
     }
 
-    pub fn preload_cell_at(&mut self, target_id: i16, value: HeapValue) -> bool {
+    pub fn preload_cell_at(&mut self, target_id: i32, value: HeapValue) -> bool {
         if let Some(target_ref) = self.entries.get_mut(target_id as usize) {
+            self.overhead += value.get_overhead();
             *target_ref.get_value_mut() = value;
             return true;
         }
@@ -197,15 +220,15 @@ impl ObjectHeap {
         false
     }
 
-    pub fn get_cell(&self, id: i16) -> Option<&HeapCell> {
+    pub fn get_cell(&self, id: i32) -> Option<&HeapCell> {
         self.entries.get(id as usize)
     }
 
-    pub fn get_cell_mut(&mut self, id: i16) -> Option<&mut HeapCell> {
+    pub fn get_cell_mut(&mut self, id: i32) -> Option<&mut HeapCell> {
         self.entries.get_mut(id as usize)
     }
 
-    pub fn try_create_cell(&mut self, tag: ObjectTag) -> i16 {
+    pub fn try_create_cell(&mut self, tag: ObjectTag) -> i32 {
         let next_free_slot_opt = self.free_list.pop_front();
         let mut has_reclaimed_slot = false;
 
@@ -214,7 +237,9 @@ impl ObjectHeap {
             next_free_id
         } else if self.next_id <= self.slot_limit {
             has_reclaimed_slot = false;
-            self.next_id += 1; self.next_id
+            let temp_next_id = self.next_id;
+            self.next_id += 1;
+            temp_next_id
         } else { -1 };
 
         if created_slot_id != -1 {
@@ -225,11 +250,22 @@ impl ObjectHeap {
                     let temp_size = temp.get_overhead();
 
                     if !has_reclaimed_slot {
-                        self.entries.push(HeapCell::new(temp));
+                        *self.entries.get_mut(created_slot_id as usize).unwrap().get_value_mut() = temp;
                     } else {
                         *self.entries.get_mut(created_slot_id as usize).unwrap() = HeapCell::new(temp);
                     }
                     self.overhead += temp_size;
+                },
+                ObjectTag::Instance => {
+                    let temp_instance_dud = HeapValue::Empty();
+
+                    if !has_reclaimed_slot {
+                        *self.entries.get_mut(created_slot_id as usize).unwrap().get_value_mut() = temp_instance_dud.clone();
+                    } else {
+                        *self.entries.get_mut(created_slot_id as usize).unwrap() = HeapCell::new(temp_instance_dud.clone());
+                    }
+
+                    self.overhead += temp_instance_dud.get_overhead();
                 },
                 _ => {},
             }
@@ -238,7 +274,7 @@ impl ObjectHeap {
         created_slot_id
     }
 
-    pub fn try_collect_cell(&mut self, id: i16) {
+    pub fn try_collect_cell(&mut self, id: i32) {
         if self.free_list.binary_search(&id).is_ok() || id >= self.next_id {
             return;
         }

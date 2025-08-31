@@ -24,7 +24,7 @@ pub enum SemanticNote {
     Callable(Vec<i32>, i32, i32),
 
     /// contains brief class info (without its internals): class-type-id
-    ClassEntity(i32),
+    ClassEntity(i32, ValueCategoryTag),
 
     /// contains constructor info: arg-type-indexes, class-type-id, arity
     Constructor(Vec<i32>, i32, i32),
@@ -67,7 +67,7 @@ impl SemanticNote {
     }
 
     pub fn try_unbox_class_info_id(&self) -> Option<i32> {
-        if let Self::ClassEntity(entity_id) = self {
+        if let Self::ClassEntity(entity_id, _) = self {
             return Some(*entity_id);
         }
 

@@ -20,13 +20,13 @@ const ANY_TYPE_ID_N: i32 = 5;
 #[repr(i8)]
 #[derive(Clone, Copy, PartialEq)]
 enum RecordInfoMode {
-    /// Denotes a variable.
-    Variable,
+    /// Denotes a local variable.
+    Local,
 
-    /// Denotes a function (and eventually lambdas).
-    Callable,
+    /// Denotes a function or class (and eventually lambdas).
+    Global,
 
-    /// Denotes a class member.
+    /// Denotes a class-local member.
     Member,
 }
 
@@ -86,7 +86,7 @@ pub struct Analyzer {
     current_class_mod: ClassAccess,
 
     /// **NOTE:** Indicates that top-level decls. must be recorded before body processing. If `false`, body processing takes place instead.
-    prep_flag: bool,
+    prepass_flag: bool,
 }
 
 impl Analyzer {
@@ -113,7 +113,7 @@ impl Analyzer {
             source_str: source_view,
             current_class_id: -1,
             current_class_mod: ClassAccess::Private,
-            prep_flag: true,
+            prepass_flag: true,
         }
     }
 
@@ -145,7 +145,7 @@ impl Analyzer {
      * Allows the semantic analyzer to visit declaration bodies.
      */
     pub fn set_preprocess_decls_flag(&mut self) {
-        self.prep_flag = true;
+        self.prepass_flag = true;
     }
 
     /**
@@ -153,7 +153,7 @@ impl Analyzer {
      * Allows the semantic analyzer to visit declaration bodies.
      */
     pub fn clear_preprocess_decls_flag(&mut self) {
-        self.prep_flag = false;
+        self.prepass_flag = false;
     }
 
     fn record_type(&mut self, type_str: String) -> i32 {
@@ -163,7 +163,7 @@ impl Analyzer {
             |&item| item.1.as_str() == type_str.as_str()
         );
 
-        if pre_result_opt.is_none() {   
+        if pre_result_opt.is_none() {
             self.type_table.insert(next_type_id, type_str);
             return next_type_id;
         }
@@ -177,22 +177,23 @@ impl Analyzer {
 
     fn lookup_name_info(&mut self, name: &str) -> SemanticNote {
         if self.current_class_id != -1 {
-            let bp_ref_opt = self.class_blueprints.try_get_entry_mut(self.current_class_id);
+            // println!("class-based name lookup...");
 
-            if bp_ref_opt.is_none() {
-                return SemanticNote::Dud;
+            if let Some(bp_ref) = self.class_blueprints.try_get_entry_mut(self.current_class_id) {
+                if let Some(bp_ref_member_ref) = bp_ref.try_get_entry_mut(name) {
+                    return bp_ref_member_ref.note.clone();
+                }
             }
-
-            return bp_ref_opt.unwrap().try_get_entry_mut(name).unwrap().note.clone();
         }
 
+        // println!("normal name lookup...");
         self.scopes.lookup_name_info(name)
     }
 
     fn record_name_info(&mut self, name: &str, info: SemanticNote, mode: RecordInfoMode) -> bool {
         match mode {
-            RecordInfoMode::Variable => self.scopes.current_scope_mut().unwrap().try_set_entry(name, info),
-            RecordInfoMode::Callable => self.scopes.global_scope_mut().unwrap().try_set_entry(name, info),
+            RecordInfoMode::Local => self.scopes.current_scope_mut().unwrap().try_set_entry(name, info),
+            RecordInfoMode::Global => self.scopes.global_scope_mut().unwrap().try_set_entry(name, info),
             RecordInfoMode::Member => {
                 self.record_class_member_info(self.current_class_id, name, self.current_class_mod, info)
             }
@@ -226,8 +227,6 @@ impl Analyzer {
 }
 
 impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
-    /// # TODO
-    /// Refactor to deduce class instance info from their variable names.
     fn visit_primitive(&mut self, e: &Primitive) -> SemanticNote {
         let source_copy = self.source_str.clone();
         let literal_lexeme = e.get_token().to_lexeme_str(source_copy.as_str()).unwrap_or("");
@@ -259,10 +258,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
         }
     }
 
-    /// # TODO
-    /// Refactor this call-checking logic to avoid extra String allocations... This is probably very slow.
     fn visit_call(&mut self, e: &Call) -> SemanticNote {
-        // NOTE Had to copy the temporary source to appease the borrow checker... probably wasting heap space but oh well!
         let source_copy = self.source_str.clone();
         let callee_info = e.get_callee().accept_visitor_sema(self);
         let callee_token = self.temp_token;
@@ -272,7 +268,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
             return SemanticNote::Dud;
         }
 
-        let callable_info_opt_1 = callee_info.try_unbox_callable_info(); // NOTe: this is a procedure OR ctor!
+        let callable_info_opt_1 = callee_info.try_unbox_callable_info(); // NOTE: this is a procedure OR ctor!
         let callable_info_opt_2: Option<RawMethodCallable> = if callable_info_opt_1.is_none() { callee_info.try_unbox_method_info() } else { None };
 
         if callable_info_opt_1.is_none() && callable_info_opt_2.is_none() {
@@ -405,9 +401,12 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
         let lhs_info = e.get_lhs().accept_visitor_sema(self);
         let expr_line_no = self.temp_token.line_no;
 
-        self.set_current_class_id(
-            lhs_info.try_unbox_class_info_id().unwrap_or(-1)
-        );
+        if expr_op == OperatorTag::Access && self.current_class_id == -1 {
+            self.set_current_class_id(
+                lhs_info.try_unbox_class_info_id().unwrap_or(-1)
+            );
+        }
+
         let rhs_info = e.get_rhs().accept_visitor_sema(self);
 
         if expr_op.is_homogeneously_typed() {
@@ -418,7 +417,6 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
                 return SemanticNote::Dud;
             }
         } else if expr_op == OperatorTag::Access {
-            self.set_current_class_id(-1);
             return rhs_info;
         } else {
             let unsupported_operator_msg = format!("Unsupported operator found around Ln. {}: {}", expr_line_no, expr_op.as_symbol());
@@ -445,8 +443,6 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
 
         let (unboxed_type_id, unboxed_value_group) = lhs_info.try_unbox_data_value().unwrap_or((-1, ValueCategoryTag::Unknown));
 
-        self.set_current_class_id(-1);
-
         SemanticNote::DataValue(unboxed_type_id, unboxed_value_group)
     }
 }
@@ -458,6 +454,10 @@ impl StmtVisitor<bool> for Analyzer {
     }
 
     fn visit_foreign_stub(&mut self, s: &ForeignStub) -> bool {
+        if !self.prepass_flag {
+            return true;
+        }
+
         let source_copy = self.source_str.clone();
         let stub_name = s.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap_or("");
 
@@ -474,7 +474,7 @@ impl StmtVisitor<bool> for Analyzer {
             self.record_name_info(
                 param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                 SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                RecordInfoMode::Variable
+                RecordInfoMode::Local
             );
             
             stub_param_types.push(param_type_id);
@@ -482,9 +482,9 @@ impl StmtVisitor<bool> for Analyzer {
 
         if !self.record_name_info(
             stub_name,
-            SemanticNote::Callable(stub_param_types, stub_ret_type_id, stub_arity), RecordInfoMode::Callable
+            SemanticNote::Callable(stub_param_types, stub_ret_type_id, stub_arity), RecordInfoMode::Global
         ) {
-            let redef_stub_msg = format!("Invalid redeclaration of procedure '{stub_name}'");
+            let redef_stub_msg = format!("Invalid redeclaration of foreign stub '{stub_name}'");
             self.report_plain_error(redef_stub_msg.as_str());
 
             return false;
@@ -501,7 +501,7 @@ impl StmtVisitor<bool> for Analyzer {
         let ret_type_id = self.record_type(fun_ret_type);
         let fun_arity = s.get_params().len() as i32;
 
-        if !self.prep_flag {
+        if !self.prepass_flag {
             self.scopes.enter_scope(fun_name);
 
             for param in s.get_params() {
@@ -511,7 +511,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::Variable
+                    RecordInfoMode::Local
                 );
             }
 
@@ -531,7 +531,7 @@ impl StmtVisitor<bool> for Analyzer {
                 fun_param_types.push(param_type_id);
             }
 
-            if !self.record_name_info(fun_name, SemanticNote::Callable(fun_param_types, ret_type_id, fun_arity), RecordInfoMode::Callable) {
+            if !self.record_name_info(fun_name, SemanticNote::Callable(fun_param_types, ret_type_id, fun_arity), RecordInfoMode::Global) {
                 let redef_fun_msg = format!("Invalid redeclaration of procedure '{fun_name}'");
                 self.report_plain_error(redef_fun_msg.as_str());
 
@@ -543,7 +543,7 @@ impl StmtVisitor<bool> for Analyzer {
     }
 
     fn visit_field_decl(&mut self, s: &FieldDecl) -> bool {
-        if self.prep_flag {
+        if self.prepass_flag {
             let src_copy = self.source_str.clone();
             let field_typename = s.get_type().typename();
             let field_type_id = self.record_type(field_typename.clone());
@@ -567,7 +567,7 @@ impl StmtVisitor<bool> for Analyzer {
         let ctor_access_mod = self.current_class_mod;
         let ctor_class_name = ctor_class_name_opt.unwrap().clone();
 
-        if self.prep_flag {
+        if self.prepass_flag {
             let mut ctor_param_type_ids = Vec::<i32>::new();
             let ctor_arity = s.get_params().len() as i32;
 
@@ -578,15 +578,24 @@ impl StmtVisitor<bool> for Analyzer {
                 ctor_param_type_ids.push(param_type_id);
             }
 
-            if !self.record_class_member_info(ctor_class_id, ctor_class_name.as_str(), ctor_access_mod, SemanticNote::Constructor(ctor_param_type_ids, ctor_class_id, ctor_arity)) {
+            if !self.record_class_member_info(ctor_class_id, ctor_class_name.as_str(), ctor_access_mod, SemanticNote::Constructor(ctor_param_type_ids.clone(), ctor_class_id, ctor_arity)) {
                 let duped_ctor_msg = format!("Cannot redeclare the '{}' constructor", ctor_class_name.as_str());
                 self.report_plain_error(&duped_ctor_msg);
+
+                return false;
+            }
+
+            if !self.record_name_info(ctor_class_name.as_str(), SemanticNote::Callable(ctor_param_type_ids, ctor_class_id, ctor_arity), RecordInfoMode::Global) {
+                let top_ctor_decl_fail_msg = format!("Failed to record constructor at top-level for class '{}'", ctor_class_name.as_str());
+                self.report_plain_error(&top_ctor_decl_fail_msg);
 
                 return false;
             }
         } else {
             let source_copy = self.source_str.clone();
             self.scopes.enter_scope(ctor_class_name.as_str());
+
+            // println!("for class of type ID {}... processing ctor", self.current_class_id);
 
             for param in s.get_params() {
                 let param_type_name = param.get_typing().typename();
@@ -595,7 +604,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::Variable
+                    RecordInfoMode::Local
                 );
             }
 
@@ -618,8 +627,9 @@ impl StmtVisitor<bool> for Analyzer {
         let met_ret_type_id = self.record_type(met_ret_type);
         let met_arity = s.get_params().len() as i32;
 
-        if !self.prep_flag {
+        if !self.prepass_flag {
             self.scopes.enter_scope(met_name);
+            // println!("for class of type ID {}... processing method", self.current_class_id);
 
             for param in s.get_params() {
                 let param_type_name = param.get_typing().typename();
@@ -628,7 +638,7 @@ impl StmtVisitor<bool> for Analyzer {
                 self.record_name_info(
                     param.get_name_token().to_lexeme_str(source_copy.as_str()).unwrap(),
                     SemanticNote::DataValue(param_type_id, ValueCategoryTag::Identity),
-                    RecordInfoMode::Variable
+                    RecordInfoMode::Local
                 );
             }
 
@@ -656,18 +666,17 @@ impl StmtVisitor<bool> for Analyzer {
             }
         }
 
-        true 
+        true
     }
 
     fn visit_class_decl(&mut self, s: &ClassDecl) -> bool {
         let class_name = s.get_class_type().typename();
         let class_type_id = self.record_type(class_name.clone());
-        self.record_new_class_bp(class_type_id);
 
-        if self.prep_flag {
-            if !(self.record_name_info(&class_name, SemanticNote::ClassEntity(class_type_id), RecordInfoMode::Variable)) {
+        if self.prepass_flag {
+            if !self.record_new_class_bp(class_type_id) {
                 let temp_line_no = self.temp_token.line_no;
-                let redecl_class_msg = format!("Cannot redeclare class {} at line {temp_line_no}", class_name.as_str());
+                let redecl_class_msg = format!("Cannot redeclare structure of class '{}' at source [ln. {}]", class_name.as_str(), temp_line_no);
                 self.report_plain_error(&redecl_class_msg);
 
                 return false;
@@ -685,6 +694,7 @@ impl StmtVisitor<bool> for Analyzer {
             }
 
             self.clear_preprocess_decls_flag();
+            // println!("processing class of type ID {class_type_id}...");
 
             for (member_stmt, member_mod) in s.get_members() {
                 self.update_current_class_mod(*member_mod);
@@ -717,14 +727,25 @@ impl StmtVisitor<bool> for Analyzer {
         let var_name_line_no = var_name_token_ref.line_no;
 
         let var_type_name = s.get_typing().typename();
-        let var_type_id = self.record_type(var_type_name);
-
-        if !self.record_name_info(
+        let var_type_id = self.record_type(var_type_name.clone());
+        
+        if self.class_blueprints.try_get_entry_mut(var_type_id).is_none() {
+            if !self.record_name_info(
+                var_name_lexeme,
+                SemanticNote::DataValue(var_type_id, ValueCategoryTag::Identity),
+                RecordInfoMode::Local
+            ) {
+                let redef_var_msg = format!("Invalid redeclaration of non-instance variable '{var_name_lexeme}'");
+                self.report_plain_error(redef_var_msg.as_str());
+                
+                return false;
+            }
+        } else if !self.record_name_info(
             var_name_lexeme,
-            SemanticNote::DataValue(var_type_id, ValueCategoryTag::Identity),
-            RecordInfoMode::Variable
+            SemanticNote::ClassEntity(var_type_id, ValueCategoryTag::Identity),
+            RecordInfoMode::Local
         ) {
-            let redef_var_msg = format!("Invalid redeclaration of variable '{var_name_lexeme}'");
+            let redef_var_msg = format!("Invalid redeclaration of '{}' instance variable '{var_name_lexeme}'", var_type_name.as_str());
             self.report_plain_error(redef_var_msg.as_str());
 
             return false;
@@ -737,7 +758,7 @@ impl StmtVisitor<bool> for Analyzer {
         } else { -1 };
 
         if var_type_id != init_type_id {
-            let bad_rhs_msg = format!("Cannot set variable '{var_name_lexeme}' at Ln. {var_name_line_no} to the RHS expression- Its type was mismatched (type-id {init_type_id}).");
+            let bad_rhs_msg = format!("Cannot set variable '{var_name_lexeme}' at Ln. {var_name_line_no} to the RHS expression- The RHS value type was mismatched (type-id {init_type_id}).");
             self.report_culprit_error(var_name_token_ref, bad_rhs_msg.as_str());
 
             return false;

@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     codegen::{
-        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}
+        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}, ir_printer::print_cfg
     },
     frontend::{
         ast::Stmt, lexer::Lexer, parser::Parser, token::TokenType
@@ -134,7 +134,16 @@ impl<'cml_2> CompilerMain<'cml_2> {
     }
 
     fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
-        self.ir_emitter.emit_all_ir(full_ast)
+        let ir_opt = self.ir_emitter.emit_all_ir(full_ast);
+
+        if let Some(complete_ir) = &ir_opt {   
+            println!("Found CFGs:\n");
+            for fun_cfg in &complete_ir.0 {
+                print_cfg(fun_cfg);
+            }
+        }
+
+        ir_opt
     }
 
     fn step_bc_emit(&mut self, full_ir: &mut IRResult) -> Option<bytecode::Program> {
@@ -146,17 +155,24 @@ impl<'cml_2> CompilerMain<'cml_2> {
     pub fn compile_from_start(&mut self, lexicals: HashMap<String, TokenType>) -> Option<bytecode::Program> {
         let full_program_ast_opt = self.step_parse(lexicals);
 
-        full_program_ast_opt.as_ref()?;
+        if full_program_ast_opt.is_none() {
+            eprintln!("CompileError: parsing failed.");
+            return None;
+        }
 
         let (full_asts, full_src_table) = full_program_ast_opt.unwrap();
 
         if !self.step_sema(&full_asts, &full_src_table) {
+            eprintln!("CompileError: found an unknown semantic error.");
             return None;
         }
 
         let full_program_ir_opt = self.step_ir_emit(&full_asts);
 
-        full_program_ir_opt.as_ref()?;
+        if full_program_ir_opt.is_none() {
+            eprintln!("CompileError: failed to emit IR.");
+            return None;
+        }
 
         let mut full_program_ir = full_program_ir_opt.unwrap();
 
@@ -164,6 +180,7 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         disassemble_program(temp_bc.as_ref().unwrap());
 
+        // TODO: replace the None below with temp_bc once codegen seems okay!
         temp_bc
     }
 }

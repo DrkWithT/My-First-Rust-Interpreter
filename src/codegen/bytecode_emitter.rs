@@ -386,6 +386,7 @@ impl BytecodeEmitter {
 
             temp_chunk.as_ref()?;
 
+            println!("loaded bytecode of proc-CFG #{cfg_id}");
             temp_procedures.push(bytecode::Procedure::new(temp_chunk.unwrap(), cfg_id));
         }
 

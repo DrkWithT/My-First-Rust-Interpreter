@@ -58,8 +58,8 @@ pub struct IREmitter<'b> {
 
     native_registry: &'b HashMap<&'static str, NativeBrief>,
 
-    /// NOTE: tracks how many Values remain around the top stack slots for the current call frame.
     ctx_instance_locator: Locator,
+    /// NOTE: tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
     next_heap_id: i32,
     main_id: i32,
@@ -98,8 +98,10 @@ impl<'b> IREmitter<'b> {
         self.has_prepass = flag;
     }
 
-    fn record_class_field(&mut self, class_name: &str, field_name: &str, ) -> bool {
+    fn record_class_field(&mut self, class_name: &str, field_name: &str) -> bool {
+        println!("record_class_field...");
         if let Some(class_layout_ref) = self.class_layouts.get_mut(class_name) {
+            println!("record_class_field succeeded for field '{field_name}' of class '{class_name}'");
             return class_layout_ref.add_member(field_name.to_string());
         }
 
@@ -122,7 +124,7 @@ impl<'b> IREmitter<'b> {
         if self.fun_locations.contains_key(name.as_str()) {
             return None;
         }
-        
+
         let next_fun_id = self.fun_locations.len();
 
         if self.main_id == -1 && name.as_str() == "main" {
@@ -174,16 +176,15 @@ impl<'b> IREmitter<'b> {
     fn lookup_locator_of(&self, opt_class_name: &str, name: &str) -> Option<Locator> {
         if !opt_class_name.is_empty() {
             if let Some(class_layout_ref) = self.class_layouts.get(opt_class_name) {
+                println!("lookup_locator_of... finding entry '{name}' in class layout.");
                 if let Some(field_id) = class_layout_ref.get_member_id(name.to_string()) {
+                    println!("lookup_locator_of... attempting find of class field in layout.");
                     return Some((Region::Field, field_id));
                 } else if let Some((_, met_external_id)) = class_layout_ref.get_real_method_id(name.to_string()) {
+                    println!("lookup_locator_of... finding method in class layout.");
                     return Some((Region::Functions, met_external_id));
                 }
-
-                return None;
             }
-
-            return None;
         }
  
         if self.fun_locals.contains_key(name) {
@@ -197,33 +198,34 @@ impl<'b> IREmitter<'b> {
         None
     }
 
-    fn lookup_fun_arity(&self, opt_class_name: &str, fun_name: &str) -> Option<i32> {
-        if !opt_class_name.is_empty() {
-            if let Some(layout_ref) = self.class_layouts.get(opt_class_name) {
-                if layout_ref.get_real_method_id(fun_name.to_string()).is_some() {
-                    if let Some((_, fun_info)) = self.fun_locations.iter().find(|entry| {
-                        entry.0 == fun_name
-                    }) {
-                        return Some(fun_info.1);
-                    }
+    // #[allow(dead_code)]
+    // fn lookup_fun_arity(&self, opt_class_name: &str, fun_name: &str) -> Option<i32> {
+    //     if !opt_class_name.is_empty() {
+    //         if let Some(layout_ref) = self.class_layouts.get(opt_class_name) {
+    //             if layout_ref.get_real_method_id(fun_name.to_string()).is_some() {
+    //                 if let Some((_, fun_info)) = self.fun_locations.iter().find(|entry| {
+    //                     entry.0 == fun_name
+    //                 }) {
+    //                     return Some(fun_info.1);
+    //                 }
 
-                    return None;
-                }
+    //                 return None;
+    //             }
 
-                return None;
-            }
+    //             return None;
+    //         }
 
-            return None;
-        }
+    //         return None;
+    //     }
 
-        if self.native_registry.contains_key(fun_name) {
-            return Some(self.native_registry.get(fun_name).unwrap().arity);
-        } else if self.fun_locations.contains_key(fun_name) {
-            return Some(self.fun_locations.get(fun_name).unwrap().1);
-        }
+    //     if self.native_registry.contains_key(fun_name) {
+    //         return Some(self.native_registry.get(fun_name).unwrap().arity);
+    //     } else if self.fun_locations.contains_key(fun_name) {
+    //         return Some(self.fun_locations.get(fun_name).unwrap().1);
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     fn record_proto_link(&mut self, from_id: i32, to_id: i32) {
         self.proto_links.push((from_id, to_id));
@@ -280,11 +282,6 @@ impl<'b> IREmitter<'b> {
         lhs_locator_opt.as_ref()?;
         lhs_locator = lhs_locator_opt.unwrap();
         self.skip_emit = false;
-
-        if e.get_rhs().get_operator().arity() == 2 {
-            self.update_relative_offset(-1);
-            rhs_locator.1 -= 1;
-        }
 
         self.emit_step(Instruction::Binary(
             Opcode::Replace,
@@ -462,18 +459,20 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
             TokenType::LiteralVarchar => {
                 let temp_varchar = literal_lexeme.to_string();
 
-                let temp_varchar_heap_id = self.get_next_heap_id() as i16;
+                let temp_varchar_heap_id = self.get_next_heap_id();
                 let temp_varchar_locator = self.record_proto_constant(Value::HeapRef(temp_varchar_heap_id));
                 self.proto_heap_vals.push(HeapValue::Varchar(temp_varchar));
-                self.emit_step(Instruction::Unary(Opcode::Push, (Region::ObjectHeap, temp_varchar_heap_id as i32)));
+                self.emit_step(Instruction::Unary(Opcode::Push, (Region::ObjectHeap, temp_varchar_heap_id)));
 
                 Some(temp_varchar_locator)
             },
             TokenType::Identifier => {
+                // println!("visit_primitive: Finding name in class '{}'...", &self.ctx_class_name);
                 let named_locator_opt = self.lookup_locator_of(&self.ctx_class_name, literal_lexeme);
 
                 named_locator_opt.as_ref()?;
 
+                // println!("visit_primitive: Found field '{literal_lexeme}'...");
                 let named_locator = named_locator_opt.unwrap().clone();
 
                 // NOTE: avoid emitting function values for now, see `visit_call()`!
@@ -482,7 +481,11 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
                         Region::Immediate | Region::TempStack | Region::ArgStore => {
                             self.emit_step(Instruction::Unary(Opcode::Push, named_locator.clone()));
                             self.update_relative_offset(1);
-                        }
+                        },
+                        Region::Field => {
+                            self.emit_step(Instruction::Unary(Opcode::Push, named_locator.clone()));
+                            self.update_relative_offset(1);
+                        },
                         _ => {}
                     }
                 }
@@ -504,11 +507,9 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
 
         let callee_locator = callee_locator_opt.unwrap();
 
-        let callee_name = e.get_callee().get_token_opt().unwrap().to_lexeme_str(&self.source_copy).unwrap_or("");
-
-        let callee_arity = self.lookup_fun_arity( &self.ctx_class_name, callee_name).unwrap_or(0);
-
         let calling_args = e.get_args();
+        let passed_arity = calling_args.len() as i32;
+
         let result_locator = (Region::TempStack, self.get_relative_offset() + 1);
 
         // NOTE: all args are temporary values and the consuming function call will automatically pop them all...
@@ -527,7 +528,7 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
                 self.emit_step(Instruction::Binary(
                     Opcode::Call,
                     callee_locator,
-                    (Region::Immediate, callee_arity),
+                    (Region::Immediate, passed_arity),
                 ));
             },
             Region::Methods => {
@@ -535,7 +536,7 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
                     Opcode::InstanceCall,
                     self.ctx_instance_locator.clone(),
                     (Region::Functions, callee_locator.1),
-                    (Region::Immediate, callee_arity),
+                    (Region::Immediate, passed_arity),
                 ));
             }
             _ => {
@@ -543,7 +544,7 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
             }
         }
 
-        self.update_relative_offset(1 - callee_arity);
+        self.update_relative_offset(1 - passed_arity);
 
         Some(result_locator)
     }
@@ -610,7 +611,6 @@ impl StmtVisitor<bool> for IREmitter<'_> {
                 }
             }
 
-            #[allow(clippy::explicit_counter_loop)]
             for (param_it, param) in s.get_params().iter().enumerate() {
                 let param_name = param
                     .get_name_token()
@@ -631,13 +631,19 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_field_decl(&mut self, s: &FieldDecl) -> bool {
+        if !self.has_prepass {
+            return true;
+        }
+
         let source_copy_view = self.source_copy.clone();
         let field_name = s.get_name_token().to_lexeme_str(&source_copy_view).unwrap_or("");
 
         if field_name.is_empty() {
+            eprintln!("Oops: unexpectedly blank field name- This can result from an invalid parse.");
             return false;
         }
-
+        
+        // println!("prepass for field of class {}", self.ctx_class_name.as_str());
         let current_class_name_copy = self.ctx_class_name.clone();
         self.record_class_field(&current_class_name_copy, field_name)
     }
@@ -650,7 +656,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             let ctor_top_id = self.record_fun_by_name(ctor_class_name.clone(), ctor_arity).unwrap_or(-1);
 
             if ctor_top_id == -1 {
-                eprintln!("Found duplicate symbol of {} constructor- Check the class declaration.", ctor_class_name.as_str());
+                eprintln!("Found duplicate symbol of '{}' constructor- Check the class declaration.", ctor_class_name.as_str());
                 self.has_error = true;
                 return false;
             }
@@ -661,6 +667,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
 
             false
         } else {
+            // println!("normal emit pass for ctor of class {}", self.ctx_class_name.as_str());
             self.enter_fun_scope();
             self.in_ctor = true;
 
@@ -683,18 +690,18 @@ impl StmtVisitor<bool> for IREmitter<'_> {
                 self.record_varname_locator(String::from(param_name), (Region::ArgStore, param_it as i32));
             }
 
-            // NOTE: add MAKE_HEAP_OBJECT instruction to guarantee the object exists by the time the ctor body runs.
-            let pre_ctor_body_block_id = self.result.last().unwrap().get_node_count() - 1;
-            let ctor_start_block_id = pre_ctor_body_block_id + 1;
-
             self.result
                 .last_mut()
                 .unwrap()
                 .add_node(Node::new(Vec::new(), -1, -1));
+            // NOTE: add MAKE_HEAP_OBJECT instruction to guarantee the object exists by the time the ctor body runs.
+            let pre_ctor_body_block_id = self.result.last().unwrap().get_node_count() - 1;
+            let ctor_start_block_id = pre_ctor_body_block_id + 1;
             
             self.emit_step(Instruction::Unary(Opcode::MakeHeapObject, (Region::Immediate, layout_field_count)));
 
             self.record_proto_link(pre_ctor_body_block_id, ctor_start_block_id);
+            self.apply_proto_links();
 
             if !s.get_body().accept_visitor(self) {
                 eprintln!("Oops: failed to generate constructor body for class '{}'", ctor_class_name.as_str());
@@ -709,27 +716,27 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_method_decl(&mut self, s: &MethodDecl) -> bool {
+        let temp_source_copy = self.source_copy.clone();
         let class_name = self.ctx_class_name.clone();
+        let method_name = s.get_name_token().to_lexeme_str(&temp_source_copy).unwrap_or("");
 
         if self.has_prepass {
-            let source_copy = self.source_copy.clone();
             let met_arity = s.get_params().len() as i32;
-            let met_top_id = self.record_fun_by_name(class_name.clone(), met_arity).unwrap_or(-1);
-            let met_name = s.get_name_token().to_lexeme_str(&source_copy).unwrap_or("");
+            let met_mangled_name = format!("{}_{}", &class_name, method_name);
+            let met_real_fun_id = self.record_fun_by_name(met_mangled_name, met_arity).unwrap_or(-1);
 
-            if met_top_id == -1 {
-                eprintln!("Oops: Found duplicate symbol of {} method of class '{}'.", met_name, class_name.as_str());
-                self.has_error = true;
-                return false;
-            }
-
-            if let Some(class_layout_ref) = self.class_layouts.get_mut(class_name.as_str()) {
-                return class_layout_ref.add_method_id(class_name, met_top_id);
+            if met_real_fun_id != -1 {
+                if let Some(class_layout_ref) = self.class_layouts.get_mut(class_name.as_str()) {
+                    return class_layout_ref.add_method_id(method_name.to_string(), met_real_fun_id);
+                }
             }
 
             false
         } else {
             self.enter_fun_scope();
+            // NOTE: This extra stack change accounts for the instance-call instruction actually pushing a hidden ref to the calling instance.
+            self.reset_relative_offset(0);
+            // println!("normal emit pass for method of class {}", self.ctx_class_name.as_str());
 
             for (param_it, param) in s.get_params().iter().enumerate() {
                 let param_name = param
@@ -741,7 +748,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             }
 
             if !s.get_body().accept_visitor(self) {
-                eprintln!("Oops: failed to generate constructor body for class '{}'", class_name.as_str());
+                eprintln!("Oops: failed to generate method body for class '{}'", class_name.as_str());
                 self.has_error = true;
             }
 
@@ -754,21 +761,24 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     fn visit_class_decl(&mut self, s: &ClassDecl) -> bool {
         let temp_class_name = s.get_class_type().typename();
 
-        if self.has_prepass {
-            self.class_layouts.insert(temp_class_name, ClassLayout::default()).is_none()
-        } else {
-            self.ctx_class_name = temp_class_name;
-
-            for (member_stmt, _) in s.get_members() {
-                if !member_stmt.accept_visitor(self) {
-                    break;
-                }
-            }
-
-            self.ctx_class_name.clear();
-
-            !self.has_error
+        if self.has_prepass && self.class_layouts.insert(temp_class_name.clone(), ClassLayout::default()).is_some() {
+            eprintln!("Oops: duplicate layout found for class '{}'.", &temp_class_name);
+            return false;
         }
+
+        self.ctx_class_name = temp_class_name;
+        // println!("emit pass over class '{}'", self.ctx_class_name.as_str());
+
+        for (member_stmt, _) in s.get_members() {
+            // println!("visiting member of class '{}'", self.ctx_class_name.as_str());
+            if !member_stmt.accept_visitor(self) {
+                break;
+            }
+        }
+
+        self.ctx_class_name.clear();
+
+        !self.has_error
     }
 
     fn visit_block(&mut self, s: &Block) -> bool {
@@ -797,6 +807,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
         let var_locator = (Region::TempStack, self.get_relative_offset());
 
         if var_object_locator_opt.is_none() {
+            eprintln!("Failed to find local variable init-expr's IR locator.");
             self.has_error = true;
             return false;
         }
@@ -977,7 +988,8 @@ impl StmtVisitor<bool> for IREmitter<'_> {
 
         if let Some(inner_result) = temp_result_locator_opt {
             // NOTE: If the inner-expr is an assignment, the result is always a reserved local variable slot. Therefore, I cannot POP since that would break stack correctness.
-            if inner_result.0 != Region::TempStack {
+            let inner_res_region = inner_result.0;
+            if inner_res_region == Region::Immediate || inner_res_region == Region::TempStack {
                 self.emit_step(Instruction::Nonary(Opcode::Pop));
                 self.update_relative_offset(-1);
             }

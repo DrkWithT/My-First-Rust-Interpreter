@@ -25,12 +25,12 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 println!("POP");
             },
             Instruction::MakeHeapValue(arg_0) => {
-                print!("MAKE_HEAP_VAL");
+                print!("MAKE_HEAP_VAL ");
                 disassemble_op_arg(arg_0);
                 println!();
             },
             Instruction::MakeHeapObject(arg_0) => {
-                print!("MAKE_HEAP_OBJ");
+                print!("MAKE_HEAP_OBJ ");
                 disassemble_op_arg(arg_0);
                 println!();
             }
@@ -118,7 +118,7 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
                 println!();
             },
             Instruction::NativeCall(native_id) => {
-                print!("NATIVE_CALL");
+                print!("NATIVE_CALL ");
                 disassemble_op_arg(native_id);
                 println!();
             },
@@ -127,6 +127,7 @@ fn disassemble_proc_chunk(chunk: &Chunk) {
 }
 
 pub fn disassemble_program(program: &Program) {
+    println!("disassemble_program...");
     let main_proc_id = program.get_entry_procedure_id().unwrap_or(-1);
 
     for proc_entry in program.get_procedures() {

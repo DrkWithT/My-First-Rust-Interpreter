@@ -14,7 +14,7 @@ pub fn native_intrin_varchar_len(engine_ref: &mut Engine) -> ExecStatus {
     let vc_len = engine_ref.fetch_heap_value_by(
         (
             bytecode::ArgMode::HeapId,
-            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id as i32 } else { -1 }
+            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id } else { -1 }
         )
     ).unwrap_or(&mut fallback_dud).try_varchar_len();
 
@@ -38,7 +38,7 @@ pub fn native_intrin_varchar_get(engine_ref: &mut Engine) -> ExecStatus {
     let vc_item = engine_ref.fetch_heap_value_by(
         (
             bytecode::ArgMode::HeapId,
-            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id as i32 } else { -1 }
+            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id } else { -1 }
         )
     ).unwrap_or(&mut fallback_dud).try_varchar_get(vc_index.into::<>());
 
@@ -63,7 +63,7 @@ pub fn native_intrin_varchar_set(engine_ref: &mut Engine) -> ExecStatus {
     let result_flag = engine_ref.fetch_heap_value_by(
         (
             bytecode::ArgMode::HeapId,
-            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id as i32 } else { -1 }
+            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id } else { -1 }
         )
     ).unwrap_or(&mut fallback_dud).try_varchar_set(vc_index.into::<>(), next_ascii_c.into::<>());
 
@@ -87,7 +87,7 @@ pub fn native_intrin_varchar_push(engine_ref: &mut Engine) -> ExecStatus {
     let result_flag = engine_ref.fetch_heap_value_by(
         (
             bytecode::ArgMode::HeapId,
-            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id as i32 } else { -1 }
+            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id } else { -1 }
         )
     ).unwrap_or(&mut fallback_dud).try_varchar_push(next_ascii_c.into::<>());
 
@@ -110,7 +110,7 @@ pub fn native_intrin_varchar_pop(engine_ref: &mut Engine) -> ExecStatus {
     let vc_item = engine_ref.fetch_heap_value_by(
         (
             bytecode::ArgMode::HeapId,
-            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id as i32 } else { -1 }
+            if let Value::HeapRef(obj_id) = vc_heap_id { obj_id } else { -1 }
         )
     ).unwrap_or(&mut fallback_dud).try_varchar_pop();
 

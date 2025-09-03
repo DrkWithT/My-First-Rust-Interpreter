@@ -42,9 +42,6 @@ pub struct Engine {
 
     stack_limit: i32,
 
-    /// INFO: Denotes whether there is a fresh temporary just before a cell replacement.
-    rhtmp: i8,
-
     /// INFO: Indicates execution status, including when to abort the program early.
     status: ExecStatus,
 }
@@ -88,7 +85,6 @@ impl Engine {
             rip: 0,
             rbp: 0,
             rsp: -1,
-            rhtmp: 0,
             stack_limit: stack_size,
             status: ExecStatus::Ok,
         }
@@ -379,13 +375,6 @@ impl Engine {
                 *self.heap.get_cell_mut(instance_ref_heap_id).unwrap().get_value_mut().try_ref_instance_field_mut(target_slot).unwrap() = *incoming_value_for_field;
             }
         }
-
-        // Discard immediate assigned value by lazy deletion.
-        if self.rhtmp == 1 && source.0 == ArgMode::StackOffset && source.1 == self.rsp {
-            self.rsp -= 1;
-        }
-
-        self.rhtmp = 0;
 
         self.rip += 1;
     }
@@ -836,35 +825,27 @@ impl Engine {
                 },
                 bytecode::Instruction::Add => {
                     self.do_add();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::Sub => {
                     self.do_sub();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::Mul => {
                     self.do_mul();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::Div => {
                     self.do_div();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::CompareEq => {
                     self.do_cmp_eq();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::CompareNe => {
                     self.do_cmp_ne();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::CompareLt => {
                     self.do_cmp_lt();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::CompareGt => {
                     self.do_cmp_gt();
-                    self.rhtmp = 1;
                 },
                 bytecode::Instruction::JumpIf(test, jump_target) => {
                     self.do_jump_if(*test, *jump_target);

@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     codegen::{
-        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}, ir_printer::print_cfg
+        bytecode_emitter::BytecodeEmitter, /*bytecode_printer::disassemble_program,*/ ir_emitter::{IREmitter, IRResult}/*, ir_printer::print_cfg*/
     },
     frontend::{
         ast::Stmt, lexer::Lexer, parser::Parser, token::TokenType
@@ -134,16 +134,18 @@ impl<'cml_2> CompilerMain<'cml_2> {
     }
 
     fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
-        let ir_opt = self.ir_emitter.emit_all_ir(full_ast);
+        // let ir_opt = self.ir_emitter.emit_all_ir(full_ast);
 
-        if let Some(complete_ir) = &ir_opt {   
-            println!("Found CFGs:\n");
-            for fun_cfg in &complete_ir.0 {
-                print_cfg(fun_cfg);
-            }
-        }
+        // if let Some(complete_ir) = &ir_opt {   
+        //     println!("Found CFGs:\n");
+        //     for fun_cfg in &complete_ir.0 {
+        //         print_cfg(fun_cfg);
+        //     }
+        // }
 
-        ir_opt
+        // ir_opt
+
+        self.ir_emitter.emit_all_ir(full_ast)
     }
 
     fn step_bc_emit(&mut self, full_ir: &mut IRResult) -> Option<bytecode::Program> {
@@ -176,11 +178,10 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         let mut full_program_ir = full_program_ir_opt.unwrap();
 
-        let temp_bc = self.step_bc_emit(&mut full_program_ir);
+        // NOTE: Debug with below calls only!
+        // let temp_bc = self.step_bc_emit(&mut full_program_ir);
+        // disassemble_program(temp_bc.as_ref().unwrap());
 
-        disassemble_program(temp_bc.as_ref().unwrap());
-
-        // TODO: replace the None below with temp_bc once codegen seems okay!
-        temp_bc
+        self.step_bc_emit(&mut full_program_ir)
     }
 }

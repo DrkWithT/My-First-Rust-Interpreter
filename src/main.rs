@@ -28,7 +28,7 @@ const LOXIM_VERSION_PATCH: i32 = 0;
 const LOXIM_MAX_ARGC: usize = 2;
 
 // The default limit of stack slots for values.
-const LOXIM_STACK_LIMIT: i32 = 16384;
+const LOXIM_STACK_LIMIT: i32 = 128;
 
 // The default limit for the VM's heap memory size in estimated bytes.
 const LOXIM_HEAP_OVERHEAD_DEFAULT: usize = TOTAL_STRING_OVERHEAD * 128;

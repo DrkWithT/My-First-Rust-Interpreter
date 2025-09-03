@@ -59,8 +59,11 @@ pub struct IREmitter<'b> {
     native_registry: &'b HashMap<&'static str, NativeBrief>,
 
     ctx_instance_locator: Locator,
+
     /// NOTE: tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
+
+    relative_local_count: i32,
     next_heap_id: i32,
     main_id: i32,
     has_prepass: bool,
@@ -85,6 +88,7 @@ impl<'b> IREmitter<'b> {
             native_registry: native_mapping,
             ctx_instance_locator: (Region::TempStack, -1),
             relative_stack_offset: -1,
+            relative_local_count: 0,
             next_heap_id: -1,
             main_id: -1,
             has_prepass: false,
@@ -146,6 +150,7 @@ impl<'b> IREmitter<'b> {
 
     fn leave_fun_scope(&mut self) {
         self.fun_locals.clear();
+        self.relative_local_count = 0;
     }
 
     fn record_varname_locator(&mut self, name: String, item: Locator) {
@@ -250,6 +255,14 @@ impl<'b> IREmitter<'b> {
         self.relative_stack_offset = arg;
     }
 
+    fn get_relative_local_count(&self) -> i32 {
+        self.relative_local_count
+    }
+
+    fn update_relative_local_count(&mut self, step: i32) {
+        self.relative_local_count += step;
+    }
+
     fn update_relative_offset(&mut self, count: i32) {
         self.relative_stack_offset += count;
     }
@@ -288,6 +301,15 @@ impl<'b> IREmitter<'b> {
             lhs_locator.clone(),
             rhs_locator.clone(),
         ));
+
+        // NOTE: If the inner-expr is an assignment, the source temporary can be popped if it'll appear at the stack's top BUT ABOVE all local var-values!
+        let current_alive_local_count = self.get_relative_local_count();
+        let rhs_is_doomed_temp = rhs_locator.0 == Region::TempStack && rhs_locator.1 > current_alive_local_count - 1;
+
+        if rhs_is_doomed_temp {
+            self.emit_step(Instruction::Nonary(Opcode::Pop));
+            self.update_relative_offset(-1);
+        }
 
         Some(lhs_locator)
     }
@@ -804,6 +826,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
 
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> bool {
         let var_object_locator_opt = s.get_init_expr().accept_visitor(self);
+        self.update_relative_local_count(1);
         let var_locator = (Region::TempStack, self.get_relative_offset());
 
         if var_object_locator_opt.is_none() {
@@ -842,6 +865,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             condition_value_locator_opt.unwrap(),
             (Region::BlockId, -1),
         ));
+        self.update_relative_offset(-1);
 
         if !s.get_truthy_body().accept_visitor(self) {
             eprintln!("Oops: failed to generate if-block");
@@ -918,6 +942,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             condition_value_locator_opt.unwrap(),
             (Region::BlockId, -1),
         ));
+        self.update_relative_offset(-1);
         self.record_proto_link(pre_while_block_id, while_block_id);
 
         if !s.get_body().accept_visitor(self) {
@@ -984,17 +1009,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_expr_stmt(&mut self, s: &ExprStmt) -> bool {
-        let temp_result_locator_opt = s.get_inner().accept_visitor(self);
-
-        if let Some(inner_result) = temp_result_locator_opt {
-            // NOTE: If the inner-expr is an assignment, the result is always a reserved local variable slot. Therefore, I cannot POP since that would break stack correctness.
-            let inner_res_region = inner_result.0;
-            if inner_res_region == Region::Immediate || inner_res_region == Region::TempStack {
-                self.emit_step(Instruction::Nonary(Opcode::Pop));
-                self.update_relative_offset(-1);
-            }
-        }
-
+        s.get_inner().accept_visitor(self);
         true
     }
 }

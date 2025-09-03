@@ -1,3 +1,5 @@
+import stdio;
+
 fun iter_fib(n: int): int {
     let iter: int = n;
     let temp: int = 0;
@@ -10,6 +12,8 @@ fun iter_fib(n: int): int {
         b = temp + b;
         iter = iter - 1;
     }
+
+    (print_val(a));
 
     return a;
 }

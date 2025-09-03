@@ -1,21 +1,16 @@
 argc=$#
 
 usage_exit() {
-    echo "Usage: utility.sh [help | build | run | profile]\n\tNote: build [debug | release | prof]"
+    echo "Usage: utility.sh [help | build | test | run | profile]\n\tNote: build [dev | release | profiling]\n\trun: [dev | release | profiling] [args...]\n\tprofile <program-name>"
     exit $1
 }
 
 handle_build() {
-    choice="$1"
-    if [[ $choice = "debug" ]]; then
-        cargo clean && cargo build
-    elif [[ $choice = "release" ]]; then
-        cargo clean && cargo build -r
-    elif [[ $choice = "prof" ]]; then
-        cargo clean && cargo build --profile profiling
-    else
-        usage_exit 1
-    fi
+    cargo clean && cargo build --profile $1;
+}
+
+handle_run() {
+    cargo run -r $1;
 }
 
 if [[ $argc -lt 1 ]]; then
@@ -25,13 +20,17 @@ fi
 action="$1"
 
 if [[ $action = "help" ]]; then
-    usage_exit 0
+    usage_exit 0;
 elif [[ $action = "build" && $argc -eq 2 ]]; then
-    handle_build $2
-elif [[ $action = "profile" ]]; then
-    samply record -s ./target/profiling/rust_demo_2
-elif [[ $action = "run" && $argc -eq 2 ]]; then
-    cargo run -r "$2"
+    handle_build $2;
+elif [[ $action = "profile" && $argc -eq 2 ]]; then
+    samply record -s -- ./target/profiling/rust_demo_2 $2;
+elif [[ $action = "test" ]]; then
+    # cargo test;
+    echo "Not implemented :(";
+    exit 1;
+elif [[ $action = "run" && $argc -ge 2 ]]; then
+    handle_run "${@:2}";
 else
-    usage_exit 1
+    usage_exit 1;
 fi

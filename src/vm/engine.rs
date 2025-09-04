@@ -7,9 +7,6 @@ use crate::vm::value::Value;
 use crate::vm::heap::{HeapValue, ObjectHeap, ObjectTag};
 
 struct CallFrame {
-    /// NOTE: Tracks current callee's arguments.
-    pub callee_args: Vec<Value>,
-
     /// NOTE: Tracks caller procedure ID.
     pub caller_id: i32,
 
@@ -57,7 +54,6 @@ impl Engine {
             saved_main_id = main_id;
 
             initial_frames.push_back(CallFrame {
-                callee_args: Vec::new(),
                 caller_id: 0,
                 caller_pos: 0,
                 old_rbp: 0,
@@ -135,31 +131,8 @@ impl Engine {
         }
     }
 
-    fn fetch_stored_arg(&self, arg_id: i32) -> &Value {
-        let current_frame_ref = &self.frames.back().unwrap().callee_args;
-
-        unsafe {
-            current_frame_ref.get_unchecked(arg_id as usize)
-        }
-    }
-
     fn fetch_inst_field(&self, arg_id: i32) -> &Value {
-        let instance_ref_slot_id = self.frames.back().unwrap().opt_instance;
-
-        if instance_ref_slot_id == -1 {
-            eprintln!("RunWarning: invalid slot ID -1 for instance fetched- crash is inevitable.");
-        }
-
-        // TODO: fix calculation for instance_slot_id!
-        let instance_ref = self.fetch_stack_temp(instance_ref_slot_id);
-
-        let instance_ref_heap_id = if let Value::HeapRef(obj_id) = instance_ref {
-            // println!("fetch_inst_field: found heap-ref case...");
-            *obj_id
-        } else {
-            // println!("fetch_inst_field: found non-heap-ref at stack-slot-{instance_ref_slot_id}: {instance_ref}");
-            -1
-        };
+        let instance_ref_heap_id = self.frames.back().unwrap().opt_instance;
 
         if instance_ref_heap_id == -1 {
             eprintln!("RunWarning: invalid reference to instance fetched: heap-id-(-1)... crash inevitable.");
@@ -177,7 +150,6 @@ impl Engine {
         match arg_mode {
             ArgMode::ConstantId => Some(self.fetch_constant(arg_id)),
             ArgMode::StackOffset => Some(self.fetch_stack_temp(arg_id)),
-            ArgMode::ArgumentId => Some(self.fetch_stored_arg(arg_id)),
             ArgMode::InstanceFieldId => Some(self.fetch_inst_field(arg_id)),
             _ => None,
         }
@@ -335,8 +307,7 @@ impl Engine {
         }
 
         self.push_in(Value::HeapRef(obj_id));
-        let obj_slot_id = self.rsp;
-        self.frames.back_mut().unwrap().opt_instance = obj_slot_id;
+        self.frames.back_mut().unwrap().opt_instance = obj_id;
 
         self.rip += 1;
     }
@@ -350,8 +321,8 @@ impl Engine {
             return;
         }
 
-        let instance_slot_id = self.frames.back().unwrap().opt_instance;
-        let has_object_field = target.0 == ArgMode::InstanceFieldId && instance_slot_id != -1;
+        let instance_heap_id = self.frames.back().unwrap().opt_instance;
+        let has_object_field = target.0 == ArgMode::InstanceFieldId && instance_heap_id != -1;
 
         if !has_object_field {
             unsafe {
@@ -359,20 +330,14 @@ impl Engine {
                 *self.stack.get_unchecked_mut(target_slot as usize) = *incoming_value;
             }
         } else {
-            let instance_ref = self.fetch_stack_temp(instance_slot_id);
-
-            let instance_ref_heap_id = if let Value::HeapRef(obj_id) = instance_ref {
-                *obj_id
-            } else { -1 };
-
-            if instance_ref_heap_id == -1 {
+            if instance_heap_id == -1 {
                 eprintln!("RunWarning: invalid instance reference fetched, crash inevitable.");
             }
 
             unsafe {
                 let incoming_value_for_field = incoming_value_opt.unwrap_unchecked();
 
-                *self.heap.get_cell_mut(instance_ref_heap_id).unwrap().get_value_mut().try_ref_instance_field_mut(target_slot).unwrap() = *incoming_value_for_field;
+                *self.heap.get_cell_mut(instance_heap_id).unwrap().get_value_mut().try_ref_instance_field_mut(target_slot).unwrap() = *incoming_value_for_field;
             }
         }
 
@@ -667,17 +632,24 @@ impl Engine {
         self.rip = returning_frame.caller_pos;
         self.rsp = self.rbp;
 
+        let leaving_instance_ref = self.frames.back().unwrap().opt_instance;
+
+        if leaving_instance_ref != -1 {
+            self.heap.get_cell_mut(leaving_instance_ref).unwrap().dec_rc();
+        }
+
         self.rbp = returning_frame.old_rbp;
         self.frames.pop_back();
     }
 
     fn do_leave(&mut self) {
-        let returning_frame = self.frames.back().unwrap();
-        self.rpid = returning_frame.caller_id;
-        self.rip = returning_frame.caller_pos;
-        self.rsp = self.rbp;
+        let heap_ref_id = self.frames.back().unwrap().opt_instance;
+        self.rpid = self.frames.back().unwrap().caller_id;
+        self.rip = self.frames.back().unwrap().caller_pos;
+        self.rsp = self.rbp - 1;
+        self.push_in(Value::HeapRef(heap_ref_id));
 
-        self.rbp = returning_frame.old_rbp;
+        self.rbp = self.frames.back().unwrap().old_rbp;
         self.frames.pop_back();
     }
 
@@ -691,29 +663,9 @@ impl Engine {
 
         let (_, pending_arg_count) = arg_count;
 
-        let mut temp_callee_args = Vec::<Value>::with_capacity(pending_arg_count as usize);
-        temp_callee_args.resize(pending_arg_count as usize, Value::Empty());
-
-        for arg_it in 0..pending_arg_count {
-            if let Some(temp_arg) = self.pop_off() {
-                unsafe {
-                    let arg_insert_it = pending_arg_count - (1 + arg_it);
-                    *temp_callee_args.get_unchecked_mut(arg_insert_it as usize) = temp_arg;
-                }
-            } else {
-                eprintln!(
-                    "RunError: Could not pop off args into callee ArgStore:\n\trbp = {}, rsp = {}",
-                    self.rbp, self.rsp
-                );
-                self.status = ExecStatus::AccessError;
-                return;
-            }
-        }
-
         let ret_instruction_pos = self.rip + 1;
 
         self.frames.push_back(CallFrame {
-            callee_args: temp_callee_args,
             caller_id: self.rpid,
             caller_pos: ret_instruction_pos,
             old_rbp: self.rbp,
@@ -722,12 +674,20 @@ impl Engine {
 
         self.rpid = proc_id;
         self.rip = 0;
-        self.rbp = self.rsp + 1;
+        self.rbp = self.rsp + 1 - pending_arg_count;
     }
 
     fn do_instance_call(&mut self, instance_arg: bytecode::Argument, fun_id_arg: bytecode::Argument, args_n: bytecode::Argument) {
         let instance_ref_stk_slot = self.rbp + instance_arg.1;
-        let instance_ref_copy = *self.stack.get_mut(instance_ref_stk_slot as usize).unwrap();
+        let instance_heap_id = if let Value::HeapRef(heap_id) = *self.stack.get_mut(instance_ref_stk_slot as usize).unwrap() {
+            heap_id
+        } else { -1 };
+
+        if instance_heap_id == -1 {
+            eprintln!("RunError: Invalid instance reference found in method call: -1");
+            self.status = ExecStatus::RefError;
+            return;
+        }
 
         let (proc_arg_mode, proc_id) = fun_id_arg;
 
@@ -738,41 +698,19 @@ impl Engine {
 
         let (_, pending_arg_count) = args_n;
 
-        let mut temp_callee_args = Vec::<Value>::with_capacity(pending_arg_count as usize);
-        temp_callee_args.resize(pending_arg_count as usize, Value::Empty());
-
-        for arg_it in 0..pending_arg_count {
-            if let Some(temp_arg) = self.pop_off() {
-                unsafe {
-                    let arg_insert_it = pending_arg_count - (1 + arg_it);
-                    *temp_callee_args.get_unchecked_mut(arg_insert_it as usize) = temp_arg;
-                }
-            } else {
-                eprintln!(
-                    "RunError: Could not transfer all args into method's ArgStore:\n\trbp = {}, rsp = {}",
-                    self.rbp, self.rsp
-                );
-                self.status = ExecStatus::AccessError;
-                return;
-            }
-        }
-
         let ret_caller_id = self.rpid;
         let ret_caller_rbp = self.rbp;
         let ret_instruction_pos = self.rip + 1;
 
         self.rpid = proc_id;
         self.rip = 0;
-        self.rbp = self.rsp + 1;
-        self.push_in(instance_ref_copy);
+        self.rbp = self.rsp + 1 - pending_arg_count;
 
         self.frames.push_back(CallFrame {
-            callee_args: temp_callee_args,
             caller_id: ret_caller_id,
             caller_pos: ret_instruction_pos,
             old_rbp: ret_caller_rbp,
-            // NOTE: the method call will have the copied instance ref at relative offset 0 because RBP is first set there.
-            opt_instance: 0,
+            opt_instance: instance_heap_id,
         });
     }
 

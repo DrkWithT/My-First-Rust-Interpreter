@@ -182,6 +182,7 @@ impl<'cml_2> CompilerMain<'cml_2> {
         // let temp_bc = self.step_bc_emit(&mut full_program_ir);
         // disassemble_program(temp_bc.as_ref().unwrap());
 
+        // temp_bc
         self.step_bc_emit(&mut full_program_ir)
     }
 }

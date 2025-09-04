@@ -5,12 +5,12 @@
   - Bytecode is stored in chunks per function & constants are stored per chunk as a vector.
   - The call stack contains call frames which track:
     - Caller's return address
-    - Callee arguments
-    - Caller's old rbp
-    - Optional "self" reference to the callee's object.
+    - Caller' old `RBP`
+    - Optional heap ID for the callee if a method is calling
   - The value stack contains data.
   - Variables become stack values offset from a base position from a call frame.
-  - Planned: GC or ref-counting for chunky objects
+  - WIP: GC or ref-counting for chunky objects
+    - A fix for missing reference count updates is pending.
 
 ### Sample Diagram (stack values)
 ```
@@ -25,13 +25,11 @@
 0: | Value(0)           | (self<Stack<100>>.sp --> table_0.members + 0)
 1: | Value([int, 100]{})| (self<Stack<100>>.data --> table_0.members + 1)
 n: | .................. |
-   ----------------------
-.. | (method table 0x0) | <-- (class method table's ID)
 ```
 
 ### Sample Object Method Table (class method maps are compile time!)
 - NOTE: These tables map method IDs to offsets of top-level generated functions in the `Program`. Constructors should be first in the method table.
-- NOTE: the `CALL_METHOD <method-id> <arity-n>` instruction will dispatch through the table by the call frame reference's table ID.
+- NOTE: the `INSTANCE_CALL` instruction will dispatch the corresponding routine to the method while the instance reference is set to the call frame by the VM, allowing valid field accesses.
 ```
 .. | MetTable_x0000 |
 0: | ClassProcedure | (Stack<int>(capacity: int) --> IDX A)
@@ -64,9 +62,9 @@ n: | .................. |
  - `jump_else <src-id> <dest?>`
  - `jump <dest?>`
  - `return <src-id>`
- - `leave`: returns control from a special function (such as constructors that push in member-wise order) without an extra result value push
- - `call <function-id> <argc>`
- - `instance_call <object-ref-slot> <actual-function-id> <argc>`
+ - `leave`: returns control from a constructor like a normal `return` yet pushes the instance reference to the stack.
+ - `call <function-id> <argc>`: Saves the caller return address of the current call frame before setting `RBP = RSP - ARGC + 1` to treat arguments as in-place locals.
+ - `instance_call <object-ref-slot> <actual-function-id> <argc>`: Similar to a normal `call` yet places the object's heap ID into the next call frame _rather_ than a stack slot!
  - `native_call <native-function-id>`
 
 ### Opcodes

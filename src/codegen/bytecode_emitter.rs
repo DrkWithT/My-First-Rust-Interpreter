@@ -28,7 +28,6 @@ fn convert_ir_arg_tag(arg: Region) -> ArgMode {
     match arg {
         Region::Immediate => ArgMode::ConstantId,
         Region::TempStack => ArgMode::StackOffset,
-        Region::ArgStore => ArgMode::ArgumentId,
         Region::ObjectHeap => ArgMode::HeapId,
         Region::Field => ArgMode::InstanceFieldId,
         Region::Functions => ArgMode::ProcedureId,

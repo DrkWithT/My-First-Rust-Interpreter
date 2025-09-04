@@ -8,7 +8,6 @@ fn format_locator(loc: &Locator) -> String {
     match *loc_tag {
         Region::Immediate => format!("const:{}", *loc_id),
         Region::TempStack => format!("temp_off:{}", *loc_id),
-        Region::ArgStore => format!("args:{}", *loc_id),
         Region::ObjectHeap => format!("object:{}", *loc_id),
         Region::Field => format!("self_field:{}", *loc_id),
         Region::Methods => format!("self_method:{}", *loc_id),

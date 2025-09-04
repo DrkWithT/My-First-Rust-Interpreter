@@ -63,7 +63,12 @@ pub struct IREmitter<'b> {
     /// NOTE: tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
 
+    /// NOTE: tracks how many locals are pushed for any function call.
     relative_local_count: i32,
+
+    /// NOTE: tracks how many locals are arguments... used for adjusting offsets of "purely-returning" functions (no non-argument locals & single expression).
+    relative_arg_count: i32,
+
     next_heap_id: i32,
     main_id: i32,
     has_prepass: bool,
@@ -89,6 +94,7 @@ impl<'b> IREmitter<'b> {
             ctx_instance_locator: (Region::TempStack, -1),
             relative_stack_offset: -1,
             relative_local_count: 0,
+            relative_arg_count: 0,
             next_heap_id: -1,
             main_id: -1,
             has_prepass: false,
@@ -150,6 +156,7 @@ impl<'b> IREmitter<'b> {
 
     fn leave_fun_scope(&mut self) {
         self.fun_locals.clear();
+        self.relative_arg_count = 0;
         self.relative_local_count = 0;
     }
 
@@ -203,35 +210,6 @@ impl<'b> IREmitter<'b> {
         None
     }
 
-    // #[allow(dead_code)]
-    // fn lookup_fun_arity(&self, opt_class_name: &str, fun_name: &str) -> Option<i32> {
-    //     if !opt_class_name.is_empty() {
-    //         if let Some(layout_ref) = self.class_layouts.get(opt_class_name) {
-    //             if layout_ref.get_real_method_id(fun_name.to_string()).is_some() {
-    //                 if let Some((_, fun_info)) = self.fun_locations.iter().find(|entry| {
-    //                     entry.0 == fun_name
-    //                 }) {
-    //                     return Some(fun_info.1);
-    //                 }
-
-    //                 return None;
-    //             }
-
-    //             return None;
-    //         }
-
-    //         return None;
-    //     }
-
-    //     if self.native_registry.contains_key(fun_name) {
-    //         return Some(self.native_registry.get(fun_name).unwrap().arity);
-    //     } else if self.fun_locations.contains_key(fun_name) {
-    //         return Some(self.fun_locations.get(fun_name).unwrap().1);
-    //     }
-
-    //     None
-    // }
-
     fn record_proto_link(&mut self, from_id: i32, to_id: i32) {
         self.proto_links.push((from_id, to_id));
     }
@@ -261,6 +239,14 @@ impl<'b> IREmitter<'b> {
 
     fn update_relative_local_count(&mut self, step: i32) {
         self.relative_local_count += step;
+    }
+
+    fn get_relative_arg_count(&self) -> i32 {
+        self.relative_arg_count
+    }
+
+    fn update_relative_arg_count(&mut self, step: i32) {
+        self.relative_arg_count += step;
     }
 
     fn update_relative_offset(&mut self, count: i32) {
@@ -483,24 +469,26 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
 
                 let temp_varchar_heap_id = self.get_next_heap_id();
                 let temp_varchar_locator = self.record_proto_constant(Value::HeapRef(temp_varchar_heap_id));
-                self.proto_heap_vals.push(HeapValue::Varchar(temp_varchar));
-                self.emit_step(Instruction::Unary(Opcode::Push, (Region::ObjectHeap, temp_varchar_heap_id)));
+
+                if !self.skip_emit {
+                    self.proto_heap_vals.push(HeapValue::Varchar(temp_varchar));
+                    self.emit_step(Instruction::Unary(Opcode::Push, (Region::ObjectHeap, temp_varchar_heap_id)));
+                    self.update_relative_offset(1);
+                }
 
                 Some(temp_varchar_locator)
             },
             TokenType::Identifier => {
-                // println!("visit_primitive: Finding name in class '{}'...", &self.ctx_class_name);
                 let named_locator_opt = self.lookup_locator_of(&self.ctx_class_name, literal_lexeme);
 
                 named_locator_opt.as_ref()?;
 
-                // println!("visit_primitive: Found field '{literal_lexeme}'...");
                 let named_locator = named_locator_opt.unwrap().clone();
 
                 // NOTE: avoid emitting function values for now, see `visit_call()`!
                 if !self.skip_emit {
                     match named_locator.0 {
-                        Region::Immediate | Region::TempStack | Region::ArgStore => {
+                        Region::Immediate | Region::TempStack => {
                             self.emit_step(Instruction::Unary(Opcode::Push, named_locator.clone()));
                             self.update_relative_offset(1);
                         },
@@ -639,7 +627,10 @@ impl StmtVisitor<bool> for IREmitter<'_> {
                     .to_lexeme_str(&self.source_copy)
                     .unwrap();
 
-                self.record_varname_locator(String::from(param_name), (Region::ArgStore, param_it as i32));
+                self.record_varname_locator(String::from(param_name), (Region::TempStack, param_it as i32));
+                self.update_relative_offset(1);
+                self.update_relative_local_count(1);
+                self.update_relative_arg_count(1);
             }
 
             if !s.get_body().accept_visitor(self) {
@@ -709,7 +700,10 @@ impl StmtVisitor<bool> for IREmitter<'_> {
                     .to_lexeme_str(&self.source_copy)
                     .unwrap();
 
-                self.record_varname_locator(String::from(param_name), (Region::ArgStore, param_it as i32));
+                self.record_varname_locator(String::from(param_name), (Region::TempStack, param_it as i32));
+                self.update_relative_offset(1);
+                self.update_relative_local_count(1);
+                self.update_relative_arg_count(1);
             }
 
             self.result
@@ -756,9 +750,6 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             false
         } else {
             self.enter_fun_scope();
-            // NOTE: This extra stack change accounts for the instance-call instruction actually pushing a hidden ref to the calling instance.
-            self.reset_relative_offset(0);
-            // println!("normal emit pass for method of class {}", self.ctx_class_name.as_str());
 
             for (param_it, param) in s.get_params().iter().enumerate() {
                 let param_name = param
@@ -766,7 +757,10 @@ impl StmtVisitor<bool> for IREmitter<'_> {
                     .to_lexeme_str(&self.source_copy)
                     .unwrap();
 
-                self.record_varname_locator(String::from(param_name), (Region::ArgStore, param_it as i32));
+                self.record_varname_locator(String::from(param_name), (Region::TempStack, param_it as i32));
+                self.update_relative_offset(1);
+                self.update_relative_local_count(1);
+                self.update_relative_arg_count(1);
             }
 
             if !s.get_body().accept_visitor(self) {
@@ -789,10 +783,8 @@ impl StmtVisitor<bool> for IREmitter<'_> {
         }
 
         self.ctx_class_name = temp_class_name;
-        // println!("emit pass over class '{}'", self.ctx_class_name.as_str());
 
         for (member_stmt, _) in s.get_members() {
-            // println!("visiting member of class '{}'", self.ctx_class_name.as_str());
             if !member_stmt.accept_visitor(self) {
                 break;
             }
@@ -984,10 +976,13 @@ impl StmtVisitor<bool> for IREmitter<'_> {
 
         let mut checked_locator = if let Some(result_locator) = result_locator_opt {
             let (result_region, result_n) = result_locator.clone();
+            // NOTE: If the function is a simple computation on its arguments without intermediate variables, its return value collapses to `rel-offset:ARGC`.
+            let local_arg_value_n = self.get_relative_arg_count();
+            let adjust_offset_of_ultrapure_fn = local_arg_value_n >= self.get_relative_local_count();
 
             match result_region {
-                Region::Immediate | Region::ArgStore => result_locator,
-                Region::TempStack => (result_region, result_n + result_delta),
+                Region::Immediate => result_locator,
+                Region::TempStack => if adjust_offset_of_ultrapure_fn { (result_region, local_arg_value_n) } else { (result_region, result_n + result_delta) },
                 _ => (Region::Immediate, -1),
             }
         } else {

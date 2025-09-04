@@ -15,7 +15,7 @@ fun sum_n(n: int): int {
 }
 
 fun gauss_sum_n(n: int): int {
-    return n * (n + 1) / 2;
+    return (n + 1) * n / 2;
 }
 
 fun main(): int {

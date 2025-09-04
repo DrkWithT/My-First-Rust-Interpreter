@@ -154,7 +154,7 @@ impl HeapCell {
     pub fn new(value_arg: HeapValue) -> Self {
         Self {
             value: value_arg,
-            ref_count: 0,
+            ref_count: 1,
         }
     }
 

@@ -5,7 +5,6 @@ use crate::semantics::types::OperatorTag;
 pub enum Region {
     Immediate,
     TempStack,
-    ArgStore,
     ObjectHeap,
     Field,
     Methods,

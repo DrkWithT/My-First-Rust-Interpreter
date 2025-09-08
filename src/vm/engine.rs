@@ -54,7 +54,7 @@ impl Engine {
             saved_main_id = main_id;
 
             initial_frames.push_back(CallFrame {
-                caller_id: 0,
+                caller_id: saved_main_id,
                 caller_pos: 0,
                 old_rbp: 0,
                 opt_instance: -1,
@@ -138,9 +138,7 @@ impl Engine {
             eprintln!("RunWarning: invalid reference to instance fetched: heap-id-(-1)... crash inevitable.");
         }
 
-        // unsafe {
-            self.heap.get_cell(instance_ref_heap_id).unwrap().get_value().try_ref_instance_field(arg_id).unwrap()
-        // }
+        self.heap.get_cell(instance_ref_heap_id).unwrap().get_value().try_ref_instance_field(arg_id).unwrap()
     }
 
     fn fetch_value_by(&self, arg: bytecode::Argument) -> Option<&Value> {
@@ -158,7 +156,7 @@ impl Engine {
     pub fn fetch_heap_value_by(&mut self, arg: bytecode::Argument) -> Option<&mut HeapValue> {
         let (arg_mode, arg_obj_id) = arg;
 
-        if arg_mode != ArgMode::StackOffset {
+        if arg_mode != ArgMode::HeapId {
             self.status = ExecStatus::BadArgs;
             return None;
         }
@@ -252,19 +250,23 @@ impl Engine {
     }
 
     fn do_push(&mut self, source: bytecode::Argument) {
-        let pushing_item = self.fetch_value_by(source);
+        let pushing_item_opt = self.fetch_value_by(source);
 
         if self.rsp > self.stack_limit {
             self.status = ExecStatus::AccessError;
             return;
         }
 
-        if let Some(val) = pushing_item {
+        if let Some(val) = pushing_item_opt {
             *self.stack.get_mut((self.rsp + 1) as usize).unwrap() = *val;
             self.rsp += 1;
             self.rip += 1;
+        } else if source.0 == ArgMode::HeapId {
+            *self.stack.get_mut((self.rsp + 1) as usize).unwrap() = Value::HeapRef(source.1);
+            self.rsp += 1;
+            self.rip += 1;
         } else {
-            self.status = ExecStatus::AccessError;
+            self.status = ExecStatus::ValueError;
         }
     }
 

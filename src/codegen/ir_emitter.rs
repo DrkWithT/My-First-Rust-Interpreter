@@ -60,6 +60,9 @@ pub struct IREmitter<'b> {
 
     ctx_instance_locator: Locator,
 
+    /// NOTE: tracks the current mapped source's ID for checking when to refresh the source to the next one by ID.
+    current_source_id: i32,
+
     /// NOTE: tracks how many Values remain around the top stack slots for the current call frame.
     relative_stack_offset: i32,
 
@@ -92,6 +95,7 @@ impl<'b> IREmitter<'b> {
             ctx_class_name: String::default(),
             native_registry: native_mapping,
             ctx_instance_locator: (Region::TempStack, -1),
+            current_source_id: -1,
             relative_stack_offset: -1,
             relative_local_count: 0,
             relative_arg_count: 0,
@@ -109,9 +113,7 @@ impl<'b> IREmitter<'b> {
     }
 
     fn record_class_field(&mut self, class_name: &str, field_name: &str) -> bool {
-        println!("record_class_field...");
         if let Some(class_layout_ref) = self.class_layouts.get_mut(class_name) {
-            println!("record_class_field succeeded for field '{field_name}' of class '{class_name}'");
             return class_layout_ref.add_member(field_name.to_string());
         }
 
@@ -188,12 +190,9 @@ impl<'b> IREmitter<'b> {
     fn lookup_locator_of(&self, opt_class_name: &str, name: &str) -> Option<Locator> {
         if !opt_class_name.is_empty() {
             if let Some(class_layout_ref) = self.class_layouts.get(opt_class_name) {
-                println!("lookup_locator_of... finding entry '{name}' in class layout.");
                 if let Some(field_id) = class_layout_ref.get_member_id(name.to_string()) {
-                    println!("lookup_locator_of... attempting find of class field in layout.");
                     return Some((Region::Field, field_id));
                 } else if let Some((_, met_external_id)) = class_layout_ref.get_real_method_id(name.to_string()) {
-                    println!("lookup_locator_of... finding method in class layout.");
                     return Some((Region::Functions, met_external_id));
                 }
             }
@@ -371,10 +370,15 @@ impl<'b> IREmitter<'b> {
         Some(result_locator)
     }
 
-    pub fn emit_all_ir(&mut self, ast_tops: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
+    pub fn emit_all_ir(&mut self, ast_tops: &VecDeque<SourceIndexedAST>, source_map: &HashMap<i32, String>) -> Option<IRResult> {
         self.set_prepass_flag(true);
 
-        for (_, temp) in ast_tops {
+        for (source_id, temp) in ast_tops {
+            if *source_id != self.current_source_id {
+                self.source_copy = source_map.get(source_id).unwrap().clone();
+                self.current_source_id = *source_id;
+            }
+
             if !temp.accept_visitor(self) {
                 eprintln!("Oops: failed to track declaration");
                 return None;
@@ -383,7 +387,12 @@ impl<'b> IREmitter<'b> {
 
         self.set_prepass_flag(false);
 
-        for (_, temp) in ast_tops {
+        for (source_id_2, temp) in ast_tops {
+            if *source_id_2 != self.current_source_id {
+                self.source_copy = source_map.get(source_id_2).unwrap().clone();
+                self.current_source_id = *source_id_2;
+            }
+
             if !temp.accept_visitor(self) {
                 eprintln!("Oops: failed to generate function from declaration");
                 return None;
@@ -563,6 +572,7 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
     // fn visit_lambda(&self) -> Locator {}
 
     fn visit_unary(&mut self, e: &Unary) -> Option<Locator> {
+        // println!("visit_unary");
         let expr_op = e.get_operator();
         let result_locator_opt = e.accept_visitor(self);
 
@@ -604,6 +614,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_function_decl(&mut self, s: &FunctionDecl) -> bool {
+        // println!("visit_function_decl");
         let function_name = String::from(s.get_name_token().to_lexeme_str(&self.source_copy).unwrap());
 
         if self.has_prepass {
@@ -644,24 +655,27 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_field_decl(&mut self, s: &FieldDecl) -> bool {
+        // println!("visit_field_decl");
         if !self.has_prepass {
             return true;
         }
 
-        let source_copy_view = self.source_copy.clone();
-        let field_name = s.get_name_token().to_lexeme_str(&source_copy_view).unwrap_or("");
+        let temp_src_copy = self.source_copy.clone();
+        let field_name = s.get_name_token().to_lexeme_str(&temp_src_copy).unwrap_or("");
 
         if field_name.is_empty() {
             eprintln!("Oops: unexpectedly blank field name- This can result from an invalid parse.");
             return false;
         }
-        
-        // println!("prepass for field of class {}", self.ctx_class_name.as_str());
+
         let current_class_name_copy = self.ctx_class_name.clone();
+
+        // println!("prepass for field of class {}", self.ctx_class_name.as_str());
         self.record_class_field(&current_class_name_copy, field_name)
     }
 
     fn visit_constructor_decl(&mut self, s: &ConstructorDecl) -> bool {
+        // println!("visit_constructor_decl");
         let ctor_class_name = self.ctx_class_name.clone();
 
         if self.has_prepass {
@@ -732,6 +746,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_method_decl(&mut self, s: &MethodDecl) -> bool {
+        // println!("visit_method_decl");
         let temp_source_copy = self.source_copy.clone();
         let class_name = self.ctx_class_name.clone();
         let method_name = s.get_name_token().to_lexeme_str(&temp_source_copy).unwrap_or("");
@@ -775,6 +790,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_class_decl(&mut self, s: &ClassDecl) -> bool {
+        // println!("visit_class_decl");
         let temp_class_name = s.get_class_type().typename();
 
         if self.has_prepass && self.class_layouts.insert(temp_class_name.clone(), ClassLayout::default()).is_some() {
@@ -817,6 +833,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_variable_decl(&mut self, s: &VariableDecl) -> bool {
+        // println!("visit_variable_decl");
         let var_object_locator_opt = s.get_init_expr().accept_visitor(self);
         self.update_relative_local_count(1);
         let var_locator = (Region::TempStack, self.get_relative_offset());
@@ -841,6 +858,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_if(&mut self, s: &If) -> bool {
+        // println!("visit_if_decl");
         let condition_value_locator_opt = s.get_check().accept_visitor(self);
 
         if condition_value_locator_opt.is_none() {
@@ -916,6 +934,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_while(&mut self, s: &While) -> bool {
+        // println!("visit_while");
         self.emit_step(Instruction::Nonary(Opcode::Nop));
         self.emit_step(Instruction::Nonary(Opcode::GenBeginLoop));
         let condition_value_locator_opt = s.get_check().accept_visitor(self);
@@ -961,6 +980,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_return(&mut self, s: &Return) -> bool {
+        // println!("visit_return");
         if self.in_ctor {
             self.emit_step(Instruction::Nonary(Opcode::Leave));
             return true;
@@ -983,6 +1003,8 @@ impl StmtVisitor<bool> for IREmitter<'_> {
             match result_region {
                 Region::Immediate => result_locator,
                 Region::TempStack => if adjust_offset_of_ultrapure_fn { (result_region, local_arg_value_n) } else { (result_region, result_n + result_delta) },
+                Region::ObjectHeap => result_locator,
+                Region::Field => result_locator,
                 _ => (Region::Immediate, -1),
             }
         } else {
@@ -1004,6 +1026,7 @@ impl StmtVisitor<bool> for IREmitter<'_> {
     }
 
     fn visit_expr_stmt(&mut self, s: &ExprStmt) -> bool {
+        // println!("visit_expr_stmt");
         s.get_inner().accept_visitor(self);
         true
     }

@@ -16,10 +16,6 @@ use crate::{
 };
 
 /// ### NOTE
-/// Stores relatively-pathed source names and their TU (translation unit) ID for a soon-to-compile Loxie file.
-pub type QueuedSource = (String, i32);
-
-/// ### NOTE
 /// Stores the combined declaration ASTs in DFS-like order for all sources reached in compilation.
 pub type FullProgramAST = VecDeque<Box<dyn Stmt>>;
 
@@ -58,14 +54,14 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
     fn step_parse<'cml_3>(&'cml_3 mut self, lexicals: HashMap<String, TokenType>) -> Option<FullSourceIndexedAST> {   
         let mut local_src_map = HashMap::<i32, String>::new();
-        let mut source_frontier = VecDeque::<QueuedSource>::new();
-        source_frontier.push_back((String::from(self.first_source_name), 0));
+        let mut source_frontier = VecDeque::<String>::new();
+        source_frontier.push_back(String::from(self.first_source_name));
         
         let mut full_sourced_ast_seq = VecDeque::<SourceIndexedAST>::new();
         let mut finished_srcs = HashSet::<String>::new();
         
         while !source_frontier.is_empty() {
-            let (next_src_name, src_tu_id) = source_frontier.pop_back().unwrap();
+            let next_src_name = source_frontier.pop_back().unwrap();
             
             let temp_tu_src_opt = if next_src_name.starts_with("./") {
                 fs::read_to_string(next_src_name.clone())
@@ -78,13 +74,14 @@ impl<'cml_2> CompilerMain<'cml_2> {
                 return None;
             }
 
+            let next_src_id = local_src_map.len() as i32;
             let temp_src = temp_tu_src_opt.unwrap();
-            local_src_map.insert(src_tu_id, temp_src.clone());
+            local_src_map.insert(next_src_id, temp_src.clone());
             let tu_src_view = temp_src.as_str();
 
             let temp_lexer = Lexer::<'cml_3>::new("");
             let mut temp_parser = Parser::<'cml_3>::new(temp_lexer);
-            
+
             temp_parser.reset_with(tu_src_view);
             let (tu_ast_opt, tu_successors) = temp_parser.parse_file(&lexicals);
             
@@ -98,18 +95,20 @@ impl<'cml_2> CompilerMain<'cml_2> {
             
             for fun_ast in temp_tu_ast {
                 full_sourced_ast_seq.push_front(
-                    (src_tu_id, fun_ast)
+                    (next_src_id, fun_ast)
                 );
             }
             
+            println!("parsed TU #{next_src_id} for file '{next_src_name}'...");
             finished_srcs.insert(next_src_name);
             
             for successor_src in tu_successors {
-                if !finished_srcs.contains(&successor_src.0) {
+                if !finished_srcs.contains(&successor_src) {
                     source_frontier.push_back(successor_src);
                 }
             }
         }
+
         Some((full_sourced_ast_seq, local_src_map))
     }
 
@@ -133,7 +132,7 @@ impl<'cml_2> CompilerMain<'cml_2> {
         true
     }
 
-    fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>) -> Option<IRResult> {
+    fn step_ir_emit(&mut self, full_ast: &VecDeque<SourceIndexedAST>, srcs_table: &HashMap<i32, String>) -> Option<IRResult> {
         // let ir_opt = self.ir_emitter.emit_all_ir(full_ast);
 
         // if let Some(complete_ir) = &ir_opt {   
@@ -145,7 +144,7 @@ impl<'cml_2> CompilerMain<'cml_2> {
 
         // ir_opt
 
-        self.ir_emitter.emit_all_ir(full_ast)
+        self.ir_emitter.emit_all_ir(full_ast, srcs_table)
     }
 
     fn step_bc_emit(&mut self, full_ir: &mut IRResult) -> Option<bytecode::Program> {
@@ -169,7 +168,7 @@ impl<'cml_2> CompilerMain<'cml_2> {
             return None;
         }
 
-        let full_program_ir_opt = self.step_ir_emit(&full_asts);
+        let full_program_ir_opt = self.step_ir_emit(&full_asts, &full_src_table);
 
         if full_program_ir_opt.is_none() {
             eprintln!("CompileError: failed to emit IR.");
@@ -181,8 +180,8 @@ impl<'cml_2> CompilerMain<'cml_2> {
         // NOTE: Debug with below calls only!
         // let temp_bc = self.step_bc_emit(&mut full_program_ir);
         // disassemble_program(temp_bc.as_ref().unwrap());
-
         // temp_bc
+
         self.step_bc_emit(&mut full_program_ir)
     }
 }

@@ -1,4 +1,4 @@
-# varchar.loxie
+# intrin_vc.loxie
 # Provides intrinsics for varchar.
 
 foreign intrin_varchar_len(vc: varchar): int;

@@ -1,4 +1,4 @@
-use crate::vm::{callable::ExecStatus, engine::Engine, value::Value};
+use crate::vm::{bytecode::ArgMode, callable::ExecStatus, engine::Engine, value::Value};
 
 pub fn native_read_int(engine_ref: &mut Engine) -> ExecStatus {
     println!("Enter an integer: ");
@@ -29,7 +29,14 @@ pub fn native_print_val(engine_ref: &mut Engine) -> ExecStatus {
         ExecStatus::NotOk
     } else {
         let temp_value = temp_value_opt.unwrap();
-        println!("{temp_value}");
+
+        if let Value::HeapRef(heap_value_id) = temp_value {
+            let temp_value = engine_ref.fetch_heap_value_by((ArgMode::HeapId, heap_value_id)).unwrap();
+
+            println!("{temp_value}");
+        } else {   
+            println!("{temp_value}");
+        }
 
         engine_ref.push_in(Value::Bool(true));
 

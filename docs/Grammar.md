@@ -28,7 +28,7 @@
 <term> ::= <factor> (("+" | "-") <factor>)*
 <equality> ::= <term> (("==" | "!=") <term>)*
 <compare> ::= <equality> (("<" | ">") <equality>)*
-<assign> ::= <access> ("=" <compare>)?
+<assign> ::= <unary> ("=" <compare>)?
 
 ; STATEMENTS
 

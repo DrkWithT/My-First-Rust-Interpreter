@@ -23,8 +23,8 @@ use crate::vm::engine::Engine;
 use crate::vm::heap::TOTAL_STRING_OVERHEAD;
 
 const LOXIM_VERSION_MAJOR: i32 = 0;
-const LOXIM_VERSION_MINOR: i32 = 3;
-const LOXIM_VERSION_PATCH: i32 = 0;
+const LOXIM_VERSION_MINOR: i32 = 4;
+const LOXIM_VERSION_PATCH: i32 = 1;
 const LOXIM_MAX_ARGC: usize = 2;
 
 // The default limit of stack slots for values.

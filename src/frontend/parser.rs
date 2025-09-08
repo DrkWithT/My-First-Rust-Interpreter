@@ -389,7 +389,7 @@ impl<'pl_2> Parser<'pl_2> {
 
     fn parse_assign(&mut self, items: &'pl_2 HashMap<String, TokenType>) -> Option<Box<dyn Expr>> {
         // println!("parse_assign -> parse_access");
-        let lhs_opt = self.parse_access(items);
+        let lhs_opt = self.parse_unary(items);
 
         lhs_opt.as_ref()?;
 

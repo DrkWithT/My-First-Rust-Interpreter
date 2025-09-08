@@ -22,13 +22,13 @@ fun main(): int {
     let gen_iota: Atoi = Atoi();
 
     let a: int = gen_iota.next();
-    (print_val(a));
+    print_val(a);
 
     let b: int = gen_iota.next();
-    (print_val(b));
+    print_val(b);
 
     let c: int = gen_iota.next();
-    (print_val(c));
+    print_val(c);
 
     return 0;
 }

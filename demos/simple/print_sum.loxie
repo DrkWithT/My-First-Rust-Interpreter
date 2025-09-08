@@ -22,8 +22,8 @@ fun main(): int {
     let iter_total: int = sum_n(10);
     let gauss_total: int = gauss_sum_n(10);
 
-    (print_val(iter_total));
-    (print_val(gauss_total));
+    print_val(iter_total);
+    print_val(gauss_total);
 
     if (iter_total == gauss_total) {
         return 0;

@@ -1,0 +1,16 @@
+# check invalid LHS on assignments
+
+fun main(): int {
+    let a: int = 20;
+
+    # this is valid
+    a = 30;
+
+    # temporary values are not assignable
+    -a = 1;
+
+    # literals are not assignable
+    1 = 2;
+
+    return 0;
+}

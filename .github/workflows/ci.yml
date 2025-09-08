@@ -32,10 +32,13 @@ jobs:
             - uses: actions/checkout@v4
             
             - name: Enable Project Scripts
-              run: chmod +x ./utility.sh ./try_demos.sh
+              run: chmod u+x ./utility.sh ./try_demos.sh
             
             - name: Build Interpreter
               run: ./utility.sh build release
             
-            - name: Run All Simple Demos
-              run: ./try_demos.sh simple
+            - name: Run Positive Demos
+              run: ./try_demos.sh demo simple
+            
+            - name: Run Negative Demos
+              run: ./try_demos.sh demo negatives

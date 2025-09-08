@@ -4,18 +4,16 @@ use crate::frontend::ast::*;
 use crate::frontend::lexer::Lexer;
 use crate::frontend::token::{Token, TokenType};
 use crate::semantics::types::*;
-use crate::compiler::driver::QueuedSource;
 use crate::token_from;
 
 pub type ASTDecls = Vec<Box<dyn Stmt>>;
-pub type ParseResult = (Option<ASTDecls>, VecDeque<QueuedSource>);
+pub type ParseResult = (Option<ASTDecls>, VecDeque<String>);
 
 pub struct Parser<'pl_1> {
     tokenizer: Lexer<'pl_1>,
-    next_sources: VecDeque<QueuedSource>,
+    next_sources: VecDeque<String>,
     previous: Token,
     current: Token,
-    source_id: i32,
     error_count: i32,
     parse_error_max: i32,
 }
@@ -24,10 +22,9 @@ impl<'pl_2> Parser<'pl_2> {
     pub fn new(tokenizer: Lexer<'pl_2>) -> Self {
         Self {
             tokenizer,
-            next_sources: VecDeque::<QueuedSource>::new(),
+            next_sources: VecDeque::<String>::new(),
             previous: token_from!(TokenType::Unknown, 0, 1, 1, 1),
             current: token_from!(TokenType::Unknown, 0, 1, 1, 1),
-            source_id: 1,
             error_count: 0,
             parse_error_max: 5,
         }
@@ -574,8 +571,7 @@ impl<'pl_2> Parser<'pl_2> {
         }
 
         let temp_target_name = temp_target_token.to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
-        self.next_sources.push_front((String::from(temp_target_name), self.source_id));
-        self.source_id += 1;
+        self.next_sources.push_front(String::from(temp_target_name));
 
         Some(Box::new(Import::new(temp_target_token)))
     }
@@ -809,14 +805,14 @@ impl<'pl_2> Parser<'pl_2> {
             all_top_stmts.push(func_decl_opt.unwrap());
         }
 
-        let mut temp_src_targets = VecDeque::<QueuedSource>::new();
+        let mut temp_src_targets = VecDeque::<String>::new();
 
         std::mem::swap(&mut temp_src_targets, &mut self.next_sources);
 
         if self.error_count == 0 {
             (Some(all_top_stmts), temp_src_targets)
         } else {
-            (None, VecDeque::<QueuedSource>::default())
+            (None, VecDeque::<String>::default())
         }
     }
 }

@@ -81,6 +81,7 @@ impl BytecodeEmitter {
                 return;
             }
 
+            // println!("BytecodeEmitter::apply_patch(): next_patch.instruction_pos = {}, current_instructions.len = {}", next_patch.instruction_pos, self.temp_instructions.len());
             let target_ref: &mut bytecode::Instruction = self
                 .temp_instructions
                 .get_mut(next_patch.instruction_pos as usize)

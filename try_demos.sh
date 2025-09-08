@@ -1,14 +1,25 @@
+OK_STATUS=0;
+FAIL_STATUS=1;
+
 handle_usage_exit() {
-    echo "Usage: ./try_demos.sh [help | simple]\n\tRun non-stdin demo programs.";
+    echo "Usage: ./try_demos.sh [help | demo]\n\tdemo [simple | negatives]: Run non-stdin demo programs. 0 -> positive checks, 1 -> negative checks";
     exit $1;
 }
 
 handle_simple_demos() {
-    for next_prog in $1
-    do
-        cargo run -r -- "./demos/$next_prog.loxie";
+    check_status=$((0));
 
-        if [[ $? -ne 0 ]]; then
+    if [[ "$1" = "negatives" ]]; then
+        check_status=$((1));
+    fi
+
+    demos=$( find -f ./demos/$1/*.loxie );
+
+    for next_prog in $demos
+    do
+        cargo run -r -- "$next_prog";
+
+        if [[ $? -ne $check_status ]]; then
             echo "\033[1;31mFAILED on demo '$next_prog'\033[0m";
             exit 1;
         else
@@ -20,7 +31,6 @@ handle_simple_demos() {
 dispatch_action() {
     argc=$#;
     action="$1";
-    non_stdin_progs="dud primitives ifs simple_function print_sum iter_fib";
 
     if [[ $argc -lt 1 ]]; then
         handle_usage_exit 1;
@@ -28,8 +38,8 @@ dispatch_action() {
 
     if [[ $action = "help" ]]; then
         handle_usage_exit 0;
-    elif [[ $action = "simple" ]]; then
-        handle_simple_demos "$non_stdin_progs";
+    elif [[ $action = "demo" && $argc -eq 2 ]]; then
+        handle_simple_demos "$2";
     else
         handle_usage_exit 1;
     fi

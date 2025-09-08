@@ -13,7 +13,7 @@ handle_simple_demos() {
         check_status=$((1));
     fi
 
-    demos=$( find -f ./demos/$1/*.loxie );
+    demos=$( find ./demos/$1/*.loxie );
 
     for next_prog in $demos
     do

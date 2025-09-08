@@ -2,15 +2,19 @@
 # Defines the native class representing strings in Loxie. The class definition defines an interface wrapping a native object containing mutable character data.
 # Version: 0.1.0
 
-import varchar;
+import intrin_vc;
 
 class String {
     private let data: varchar;
 
     # Creates a new String wrapper for a varchar.
-    public ctor(vc: varchar) {
-        data = vc;
+    public ctor(vcs: varchar) {
+        data = vcs;
         return 0;
+    }
+
+    public met chars(): varchar {
+        return data;
     }
 
     # Returns the length of the string.
@@ -28,13 +32,13 @@ class String {
         return intrin_varchar_set(data, pos, c);
     }
 
-    # Appends a single char and returns the new length (-1 on error).
-    public met append_char(c: char): int {
+    # Appends a single char and returns true if OK
+    public met append_char(c: char): bool {
         if intrin_varchar_push(data, c) {
-            return length();
+            return true;
         }
 
-        return -1;
+        return false;
     }
 
     public met pop_char(): char {
@@ -45,16 +49,19 @@ class String {
         return '\0';
     }
 
-    # Zeroes the buffer of a String, returning 0.
-    public met clear(): int {
+    # zeroes the buffer of a String, returning false on error
+    public met clear(): bool {
         let char_n: int = length();
         let data_i: int = 0;
 
         while data_i < char_n {
-            set(data_i, '\0');
-            data_i = data_i + 1;
+            if set(data_i, '\0') {
+                data_i = data_i + 1;
+            } else {
+                return false;
+            }
         }
 
-        return 0;
+        return true;
     }
 }

@@ -1,0 +1,19 @@
+# test simple string ops
+
+import stdio;
+
+import string;
+
+fun main(): int {
+    let message: String = String("hello world!");
+    let msg_len: int = message.length();
+    let msg_data: varchar = message.chars();
+
+    (print_val("msg_len:"));
+    (print_val(msg_len));
+
+    (print_val("message.data:"));
+    (print_val(msg_data));
+
+    return 0;
+}

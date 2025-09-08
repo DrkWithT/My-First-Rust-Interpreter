@@ -129,7 +129,7 @@ impl Display for HeapValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::Empty() => write!(f, "HeapValue(empty)"),
-            Self::Varchar(s_val) => write!(f, "HeapValue('{s_val}')"),
+            Self::Varchar(s_val) => write!(f, "{s_val}"),
             Self::Instance(vals) => {
                 let mut building_str = String::default();
 

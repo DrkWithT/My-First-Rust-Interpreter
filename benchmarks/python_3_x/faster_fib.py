@@ -1,6 +1,6 @@
 """
     faster_fib.py\n
-    This is for a running time comparison against `faster_fib.loxie` upon the Conch VM. Unlike the naive fibonacci, this algorithm caches the previous two results in the arguments of successive calls to emulate iteration.
+    This is for a running time comparison of `fib.loxie` upon Loxie's VM vs. Python 3's VM. However, this algorithm caches the last two results despite being recursive.\n
 """
 
 import time

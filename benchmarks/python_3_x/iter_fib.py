@@ -1,6 +1,6 @@
 """
     iter_fib.py\n
-    This is for a running time comparison against `iter_fib.loxie` upon the Conch VM.
+    This is for a running time comparison of `fib.loxie` upon Loxie's VM vs. Python 3's VM.\n
 """
 
 import time

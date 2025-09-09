@@ -1,7 +1,7 @@
 argc=$#
 
 usage_exit() {
-    echo "Usage: utility.sh [help | build | test | run | profile]\n\tNote: build [dev | release | profiling]\n\trun: [dev | release | profiling] [args...]\n\tprofile <program-name>"
+    echo "Usage: utility.sh [help | build | test | run | profile]\n\tNote: build [dev | release | profiling]\n\trun: [args...]\n\tprofile <program-name>"
     exit $1
 }
 

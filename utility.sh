@@ -5,8 +5,24 @@ usage_exit() {
     exit $1
 }
 
+handle_no_impl() {
+    echo "\033[1;31mThe action $1 is not implemented :(\033[0m";
+    exit 1;
+}
+
 handle_build() {
     cargo clean && cargo build --profile $1;
+}
+
+handle_profiling() {
+    has_profiling_artifact=$( find ./target/profiling );
+
+    if [[ $has_profiling_artifact -ne 0 ]]; then
+        echo "\033[1;33mProfiling build not found, rebuilding...\033[0m";
+        cargo clean && cargo build --profile profiling;
+    fi
+
+    samply record -s -- ./target/profiling/loxim $1;
 }
 
 handle_run() {
@@ -24,11 +40,10 @@ if [[ $action = "help" ]]; then
 elif [[ $action = "build" && $argc -eq 2 ]]; then
     handle_build $2;
 elif [[ $action = "profile" && $argc -eq 2 ]]; then
-    samply record -s -- ./target/profiling/rust_demo_2 $2;
+    handle_profiling $2
 elif [[ $action = "test" ]]; then
-    # cargo test;
-    echo "Not implemented :(";
-    exit 1;
+    # TODO: use `cargo test` cmd in a handle_tests function.
+    handle_no_impl $action
 elif [[ $action = "run" && $argc -ge 2 ]]; then
     handle_run "${@:2}";
 else

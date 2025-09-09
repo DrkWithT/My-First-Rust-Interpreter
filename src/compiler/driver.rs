@@ -5,9 +5,11 @@ use std::{
     fs
 };
 
+// NOTE: allow unused import for bytecode_printer::disassemble_program until a dump flag is added for the driver.
+#[allow(unused_imports)]
 use crate::{
     codegen::{
-        bytecode_emitter::BytecodeEmitter, /*bytecode_printer::disassemble_program,*/ ir_emitter::{IREmitter, IRResult}/*, ir_printer::print_cfg*/
+        bytecode_emitter::BytecodeEmitter, bytecode_printer::disassemble_program, ir_emitter::{IREmitter, IRResult}/*, ir_printer::print_cfg*/
     },
     frontend::{
         ast::Stmt, lexer::Lexer, parser::Parser, token::TokenType

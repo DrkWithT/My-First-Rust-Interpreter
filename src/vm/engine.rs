@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
+use std::ptr::null;
 
 use crate::utils::bundle::Bundle;
-use crate::vm::bytecode::{self, ArgMode, Program};
+use crate::vm::bytecode::{self, ArgMode, Procedure, Program};
 use crate::vm::callable::ExecStatus;
 use crate::vm::value::Value;
 use crate::vm::heap::{HeapValue, ObjectHeap, ObjectTag};
@@ -21,12 +22,14 @@ struct CallFrame {
 /// TODO: integrate ObjectHeap... add GC sweeping methods.
 pub struct Engine {
     heap: ObjectHeap,
-    program: Program,
     frames: VecDeque<CallFrame>,
     stack: Vec<Value>,
 
-    /// INFO: Holds the current Procedure index.
-    rpid: i32,
+    /// INFO: Holds a viewing pointer directly to all Procedures.
+    procs_view: *const Procedure,
+
+    /// INFO: Holds the current Procedure pointer.
+    rpp: *const Procedure,
 
     /// INFO: Holds the current instruction pointer.
     rip: i32,
@@ -44,26 +47,19 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(mut program_arg: Program, heap_size: usize, stack_size: i32) -> Self {
-        let program_main_id_opt = program_arg.get_entry_procedure_id();
-
+    pub fn new(program: &mut Program, heap_size: usize, stack_size: i32) -> Self {
         let mut initial_frames = VecDeque::<CallFrame>::new();
-        let mut saved_main_id = -1;
 
-        if let Some(main_id) = program_main_id_opt {
-            saved_main_id = main_id;
-
-            initial_frames.push_back(CallFrame {
-                caller_id: saved_main_id,
-                caller_pos: 0,
-                old_rbp: 0,
-                opt_instance: -1,
-            });
-        }
+        initial_frames.push_back(CallFrame {
+            caller_id: program.get_entry_procedure_id().unwrap_or(-1),
+            caller_pos: 0,
+            old_rbp: 0,
+            opt_instance: -1,
+        });
 
         let mut initial_heap = ObjectHeap::new(heap_size);
 
-        for temp_heap_val in program_arg.get_heap_preloadables_mut() {
+        for temp_heap_val in program.get_heap_preloadables_mut() {
             let temp_cell_id = initial_heap.try_create_cell(temp_heap_val.get_object_tag());
             *initial_heap.get_cell_mut(temp_cell_id).unwrap().get_value_mut() = std::mem::take(temp_heap_val);
         }
@@ -74,26 +70,15 @@ impl Engine {
 
         Self {
             heap: initial_heap,
-            program: program_arg,
             frames: initial_frames,
             stack: initial_stack_mem,
-            rpid: saved_main_id,
+            procs_view: null(),
+            rpp: null(),
             rip: 0,
             rbp: 0,
             rsp: -1,
             stack_limit: stack_size,
             status: ExecStatus::Ok,
-        }
-    }
-
-    fn fetch_instruction(&self) -> &bytecode::Instruction {
-        unsafe {
-            self.program
-                .get_procedures()
-                .get_unchecked(self.rpid as usize)
-                .get_chunk()
-                .get_code()
-                .get_unchecked(self.rip as usize)
         }
     }
 
@@ -115,9 +100,8 @@ impl Engine {
 
     fn fetch_constant(&self, const_id: i32) -> &Value {
         unsafe {
-            self.program
-                .get_procedures()
-                .get_unchecked(self.rpid as usize)
+            let proc_ref = &*self.rpp;
+            proc_ref
                 .get_chunk()
                 .get_constant(const_id)
         }
@@ -135,7 +119,7 @@ impl Engine {
         let instance_ref_heap_id = self.frames.back().unwrap().opt_instance;
 
         if instance_ref_heap_id == -1 {
-            eprintln!("RunWarning: invalid reference to instance fetched: heap-id-(-1)... crash inevitable.");
+            panic!("RunWarning: invalid reference to instance fetched: heap-id-(-1)... crash inevitable.");
         }
 
         self.heap.get_cell(instance_ref_heap_id).unwrap().get_value().try_ref_instance_field(arg_id).unwrap()
@@ -186,15 +170,6 @@ impl Engine {
     }
 
     pub fn push_in(&mut self, temp: Value) {
-        if self.rsp > self.stack_limit {
-            eprintln!(
-                "RunError: invalid stack top- rbp = {}, rsp = {}",
-                self.rbp, self.rsp
-            );
-            self.status = ExecStatus::AccessError;
-            return;
-        }
-
         self.rsp += 1;
 
         if self.rsp > self.stack_limit {
@@ -216,7 +191,9 @@ impl Engine {
             }
         }
 
-        *self.stack.get_mut(self.rsp as usize).unwrap() = temp;
+        unsafe {
+            *self.stack.get_unchecked_mut(self.rsp as usize) = temp;
+        }
     }
 
     pub fn pop_off(&mut self) -> Option<Value> {
@@ -309,7 +286,10 @@ impl Engine {
         }
 
         self.push_in(Value::HeapRef(obj_id));
-        self.frames.back_mut().unwrap().opt_instance = obj_id;
+
+        unsafe {
+            self.frames.back_mut().unwrap_unchecked().opt_instance = obj_id;
+        }
 
         self.rip += 1;
     }
@@ -333,7 +313,9 @@ impl Engine {
             }
         } else {
             if instance_heap_id == -1 {
-                eprintln!("RunWarning: invalid instance reference fetched, crash inevitable.");
+                eprintln!("RunWarning: invalid instance reference of -1 fetched!");
+                self.status = ExecStatus::RefError;
+                return;
             }
 
             unsafe {
@@ -630,7 +612,11 @@ impl Engine {
         *self.stack.get_mut(self.rbp as usize).unwrap() = *result_temp;
 
         let returning_frame = self.frames.back().unwrap();
-        self.rpid = returning_frame.caller_id;
+
+        unsafe {
+            self.rpp = self.procs_view.offset(returning_frame.caller_id as isize);
+        }
+
         self.rip = returning_frame.caller_pos;
         self.rsp = self.rbp;
 
@@ -646,7 +632,12 @@ impl Engine {
 
     fn do_leave(&mut self) {
         let heap_ref_id = self.frames.back().unwrap().opt_instance;
-        self.rpid = self.frames.back().unwrap().caller_id;
+        let caller_id = self.frames.back().unwrap().caller_id;
+
+        unsafe {
+            self.rpp = self.procs_view.offset(caller_id as isize);
+        }
+
         self.rip = self.frames.back().unwrap().caller_pos;
         self.rsp = self.rbp - 1;
         self.push_in(Value::HeapRef(heap_ref_id));
@@ -667,14 +658,19 @@ impl Engine {
 
         let ret_instruction_pos = self.rip + 1;
 
-        self.frames.push_back(CallFrame {
-            caller_id: self.rpid,
-            caller_pos: ret_instruction_pos,
-            old_rbp: self.rbp,
-            opt_instance: -1,
-        });
+        unsafe {
+            let eff_caller_rpid= self.rpp.offset_from(self.procs_view) as i32;
 
-        self.rpid = proc_id;
+            self.frames.push_back(CallFrame {
+                caller_id: eff_caller_rpid,
+                caller_pos: ret_instruction_pos,
+                old_rbp: self.rbp,
+                opt_instance: -1,
+            });
+
+            self.rpp = self.procs_view.offset(proc_id as isize);
+        }
+
         self.rip = 0;
         self.rbp = self.rsp + 1 - pending_arg_count;
     }
@@ -700,20 +696,22 @@ impl Engine {
 
         let (_, pending_arg_count) = args_n;
 
-        let ret_caller_id = self.rpid;
-        let ret_caller_rbp = self.rbp;
-        let ret_instruction_pos = self.rip + 1;
+        unsafe {
+            let ret_caller_id = self.rpp.offset_from(self.procs_view) as i32;
+            let ret_caller_rbp = self.rbp;
+            let ret_instruction_pos = self.rip + 1;
 
-        self.rpid = proc_id;
-        self.rip = 0;
-        self.rbp = self.rsp + 1 - pending_arg_count;
+            self.rpp = self.procs_view.offset(proc_id as isize);
+            self.rip = 0;
+            self.rbp = self.rsp + 1 - pending_arg_count;
 
-        self.frames.push_back(CallFrame {
-            caller_id: ret_caller_id,
-            caller_pos: ret_instruction_pos,
-            old_rbp: ret_caller_rbp,
-            opt_instance: instance_heap_id,
-        });
+            self.frames.push_back(CallFrame {
+                caller_id: ret_caller_id,
+                caller_pos: ret_instruction_pos,
+                old_rbp: ret_caller_rbp,
+                opt_instance: instance_heap_id,
+            });
+        }
     }
 
     fn do_native_call(&mut self, natives: &Bundle, native_arg: bytecode::Argument) {
@@ -728,92 +726,103 @@ impl Engine {
         self.frames.is_empty() || self.status != ExecStatus::Ok
     }
 
-    pub fn run(&mut self, natives: &Bundle) -> ExecStatus {
-        while !self.is_done() {
-            let next_instr = self.fetch_instruction();
+    pub fn run(&mut self, program: &Program, natives: &Bundle) -> ExecStatus {
+        if program.get_entry_procedure_id().is_none() {
+            println!("RunNote: No main procedure found.");
+            return ExecStatus::Ok;
+        }
 
-            match next_instr {
-                bytecode::Instruction::Nop => {
-                    self.rip += 1;
-                },
-                bytecode::Instruction::LoadConst(source) => {
-                    self.do_load_const(*source);
-                },
-                bytecode::Instruction::Push(source) => {
-                    self.do_push(*source);
-                },
-                bytecode::Instruction::Pop => {
-                    self.do_pop();
-                },
-                bytecode::Instruction::MakeHeapValue(tag_arg) => {
-                    self.do_make_heap_value(*tag_arg);
-                },
-                bytecode::Instruction::MakeHeapObject(heap_cell_n_arg) => {
-                    self.do_make_heap_object(*heap_cell_n_arg);
-                },
-                bytecode::Instruction::Replace(target, source) => {
-                    self.do_replace(*target, *source);
-                },
-                bytecode::Instruction::Neg(target) => {
-                    self.do_neg(*target);
-                },
-                bytecode::Instruction::Inc(target) => {
-                    self.do_inc(*target);
-                },
-                bytecode::Instruction::Dec(target) => {
-                    self.do_dec(*target);
-                },
-                bytecode::Instruction::Add => {
-                    self.do_add();
-                },
-                bytecode::Instruction::Sub => {
-                    self.do_sub();
-                },
-                bytecode::Instruction::Mul => {
-                    self.do_mul();
-                },
-                bytecode::Instruction::Div => {
-                    self.do_div();
-                },
-                bytecode::Instruction::CompareEq => {
-                    self.do_cmp_eq();
-                },
-                bytecode::Instruction::CompareNe => {
-                    self.do_cmp_ne();
-                },
-                bytecode::Instruction::CompareLt => {
-                    self.do_cmp_lt();
-                },
-                bytecode::Instruction::CompareGt => {
-                    self.do_cmp_gt();
-                },
-                bytecode::Instruction::JumpIf(test, jump_target) => {
-                    self.do_jump_if(*test, *jump_target);
-                },
-                bytecode::Instruction::JumpElse(test, jump_target) => {
-                    self.do_jump_else(*test, *jump_target);
-                },
-                bytecode::Instruction::Jump(jump_target) => {
-                    self.do_jump(*jump_target);
-                },
-                bytecode::Instruction::Return(source) => {
-                    self.do_return(*source);
-                },
-                bytecode::Instruction::Leave => {
-                    self.do_leave();
+        unsafe {
+            let main_id = program.get_entry_procedure_id().unwrap();
+            self.procs_view = program.get_procedures().as_ptr();
+            self.rpp = self.procs_view.offset(main_id as isize);
+
+            while !self.is_done() {
+                let next_instr = (&*self.rpp).get_chunk().get_code().get_unchecked(self.rip as usize);
+
+                match next_instr {
+                    bytecode::Instruction::Nop => {
+                        self.rip += 1;
+                    },
+                    bytecode::Instruction::LoadConst(source) => {
+                        self.do_load_const(*source);
+                    },
+                    bytecode::Instruction::Push(source) => {
+                        self.do_push(*source);
+                    },
+                    bytecode::Instruction::Pop => {
+                        self.do_pop();
+                    },
+                    bytecode::Instruction::MakeHeapValue(tag_arg) => {
+                        self.do_make_heap_value(*tag_arg);
+                    },
+                    bytecode::Instruction::MakeHeapObject(heap_cell_n_arg) => {
+                        self.do_make_heap_object(*heap_cell_n_arg);
+                    },
+                    bytecode::Instruction::Replace(target, source) => {
+                        self.do_replace(*target, *source);
+                    },
+                    bytecode::Instruction::Neg(target) => {
+                        self.do_neg(*target);
+                    },
+                    bytecode::Instruction::Inc(target) => {
+                        self.do_inc(*target);
+                    },
+                    bytecode::Instruction::Dec(target) => {
+                        self.do_dec(*target);
+                    },
+                    bytecode::Instruction::Add => {
+                        self.do_add();
+                    },
+                    bytecode::Instruction::Sub => {
+                        self.do_sub();
+                    },
+                    bytecode::Instruction::Mul => {
+                        self.do_mul();
+                    },
+                    bytecode::Instruction::Div => {
+                        self.do_div();
+                    },
+                    bytecode::Instruction::CompareEq => {
+                        self.do_cmp_eq();
+                    },
+                    bytecode::Instruction::CompareNe => {
+                        self.do_cmp_ne();
+                    },
+                    bytecode::Instruction::CompareLt => {
+                        self.do_cmp_lt();
+                    },
+                    bytecode::Instruction::CompareGt => {
+                        self.do_cmp_gt();
+                    },
+                    bytecode::Instruction::JumpIf(test, jump_target) => {
+                        self.do_jump_if(*test, *jump_target);
+                    },
+                    bytecode::Instruction::JumpElse(test, jump_target) => {
+                        self.do_jump_else(*test, *jump_target);
+                    },
+                    bytecode::Instruction::Jump(jump_target) => {
+                        self.do_jump(*jump_target);
+                    },
+                    bytecode::Instruction::Return(source) => {
+                        self.do_return(*source);
+                    },
+                    bytecode::Instruction::Leave => {
+                        self.do_leave();
+                    }
+                    bytecode::Instruction::Call(proc_id, arity) => {
+                        self.do_call(*proc_id, *arity);
+                    },
+                    bytecode::Instruction::InstanceCall(instance_slot, fun_id, arity) => {
+                        self.do_instance_call(*instance_slot, *fun_id, *arity);
+                    },
+                    bytecode::Instruction::NativeCall(native_id) => {
+                        self.do_native_call(natives, *native_id);
+                    },
                 }
-                bytecode::Instruction::Call(proc_id, arity) => {
-                    self.do_call(*proc_id, *arity);
-                },
-                bytecode::Instruction::InstanceCall(instance_slot, fun_id, arity) => {
-                    self.do_instance_call(*instance_slot, *fun_id, *arity);
-                },
-                bytecode::Instruction::NativeCall(native_id) => {
-                    self.do_native_call(natives, *native_id);
-                },
-            }
 
-            self.try_sweep();
+                self.try_sweep();
+            }
         }
 
         self.last_sweep();

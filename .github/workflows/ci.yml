@@ -4,26 +4,11 @@ name: CI
 
 on:
     push:
-        branches: [main, dev-2]
+        branches: [dev-2]
     pull_request:
         branches: [main]
 
 jobs:
-    # testing:
-    #     name: Run Code Tests
-    #     runs-on: ubuntu-latest
-    #     steps:
-    #         - uses: actions/checkout@v4
-            
-    #         - name: Enable Project Scripts
-    #           run: chmod +x ./utility.sh
-            
-    #         - name: Build Program
-    #           run: ./utility.sh build release
-            
-    #         - name: Run Tests
-    #           run: ./utility.sh test
-
     demos:
         name: Try Demo Programs
         runs-on: ubuntu-latest

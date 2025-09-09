@@ -125,17 +125,18 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let program = program_opt.unwrap();
+    let mut program = program_opt.unwrap();
 
-    let mut engine = Engine::new(program, LOXIM_HEAP_OVERHEAD_DEFAULT, LOXIM_STACK_LIMIT);
+    // let mut engine = Engine::new(LOXIM_HEAP_OVERHEAD_DEFAULT, LOXIM_STACK_LIMIT);
+    let mut engine = Engine::new(&mut program, LOXIM_HEAP_OVERHEAD_DEFAULT, LOXIM_STACK_LIMIT);
 
     let pre_run_time = Instant::now();
-    let engine_status = engine.run(&global_natives);
-    let running_time = Instant::now() - pre_run_time;
+    // let engine_status = engine.run(&program, &global_natives);
+    let engine_status = engine.run(&program, &global_natives);
 
     println!(
-        "\x1b[1;33mFinished in {} microseconds\x1b[0m",
-        running_time.as_micros()
+        "\x1b[1;33mFinished in {} ms\x1b[0m",
+        pre_run_time.elapsed().as_millis()
     );
 
     match engine_status {

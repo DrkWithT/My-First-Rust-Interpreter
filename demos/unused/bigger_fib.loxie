@@ -1,15 +1,15 @@
-# recursive fibonacci
+# recursive fibonacci 40th
 
 fun fib(n: int): int {
     if n < 2 {
         return n;
     }
 
-    return fib(n - 1) + fib(n - 2);
+    return fib(n - 2) + fib(n - 1);
 }
 
 fun main(): int {
-    if fib(30) != 832040 {
+    if fib(35) != 9227465 {
         return 1;
     }
 

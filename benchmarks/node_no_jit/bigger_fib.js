@@ -7,12 +7,12 @@ const fib = (n) => {
 };
 
 const start_time = Date.now();
-const ans = fib(30);
+const ans = fib(35);
 const elapsed_time = Date.now() - start_time;
 
-console.log("Finished in ", elapsed_time, "ms");
+console.log("Finished in ", elapsed_time, "ms\n\tResult: ", ans);
 
-if (ans == 832040) {
+if (ans == 9227465) {
     process.exit(0);
 } else {
     process.exit(1);

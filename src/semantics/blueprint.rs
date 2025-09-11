@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::semantics::scope::SemanticNote;
-use crate::semantics::types::ClassAccess;
+use crate::semantics::types::AccessFlag;
 
 pub struct ClassMember {
     pub note: SemanticNote,
-    pub access_mod: ClassAccess,
+    pub access_mod: AccessFlag,
 }
 
 /**
@@ -29,8 +29,12 @@ impl ClassBlueprint {
         self.typing_id
     }
 
-    pub fn try_get_entry_mut(&mut self, name_view: &str) -> Option<&mut ClassMember> {
-        self.entries.get_mut(name_view)
+    pub fn try_get_entry_mut(&mut self, name_view: &str) -> Option<(AccessFlag, &mut ClassMember)> {
+        if let Some(member_ref) = self.entries.get_mut(name_view) {
+            return Some((member_ref.access_mod, member_ref));
+        }
+
+        None
     }
 
     pub fn try_set_entry(&mut self, name_view: &str, note: ClassMember) -> bool {

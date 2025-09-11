@@ -681,7 +681,7 @@ impl<'pl_2> Parser<'pl_2> {
         self.consume_of([TokenType::Keyword], items);
 
         let access_modify_word = self.previous().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("private");
-        let access_modify_enum = if access_modify_word == "public" { ClassAccess::Public } else { ClassAccess::Private };
+        let access_modify_enum = if access_modify_word == "public" { AccessFlag::Exposed } else { AccessFlag::Hidden };
 
         let hint_keyword = self.current().to_lexeme_str(self.tokenizer.view_source()).unwrap_or("");
 

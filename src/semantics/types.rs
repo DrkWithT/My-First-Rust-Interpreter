@@ -218,9 +218,9 @@ impl TypeKind for FunctionInfo {
 
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq)]
-pub enum ClassAccess {
-    Public,
-    Private,
+pub enum AccessFlag {
+    Exposed,
+    Hidden,
 }
 
 pub struct ClassInfo {

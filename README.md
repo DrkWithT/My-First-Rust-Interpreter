@@ -7,16 +7,15 @@ My second ever project in Rust. This will become a mini-language called Loxie as
 <img src="./docs/assets/Loxie_Iota.png" width="50%" alt="fibonacci program">
 
 ### Design
- - Procedural & functional paradigm
+ - Paradigms: imperative, object-oriented, and some functional?
  - Static & strong typing + null safety
  - Declared procedures & classes
  - Built-in functions galore!
  - NOTE: the compiler only reads sources relative to the `loxie_lib` directory or the invoked-from directory for now.
 
 ### Upcoming Updates
- - Improve diagnostics & String support (0.4.2)
-   - Check member access by `public / private` specifiers.
-   - Fully test `String`.
+ - Improve diagnostics & String support (0.4.3)
+   - Fix `String`... fix method calls _within_ a class.
  - Replace VM with register VM! (0.5.0)
  - Support arrays. (0.6.0)
  - Add more standard I/O native functions! (0.6.1)

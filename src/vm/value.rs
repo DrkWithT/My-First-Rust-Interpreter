@@ -16,7 +16,7 @@ impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Self::Bool(flag) => write!(f, "{}", *flag),
-            Self::Char(c) => write!(f, "'{}'", *c),
+            Self::Char(c) => write!(f, "'{}'", *c as char),
             Self::Int(value) => write!(f, "{}", *value),
             Self::Float(value) => write!(f, "{}", *value),
             Self::HeapRef(id) => write!(f, "object-{}", *id),
@@ -30,6 +30,15 @@ impl From<Value> for bool {
         match val {
             Value::Bool(flag) => flag,
             _ => false,
+        }
+    }
+}
+
+impl From<Value> for u8 {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Char(ascii_c) => ascii_c,
+            _ => 0,
         }
     }
 }
@@ -148,6 +157,7 @@ impl Value {
         match self {
             Self::Empty() => false,
             Self::Bool(value) => *value == (*rhs).into(),
+            Self::Char(value) => *value == (*rhs).into(),
             Self::Int(value) => *value == (*rhs).into(),
             Self::Float(value) => *value == (*rhs).into(),
             _ => {
@@ -167,6 +177,7 @@ impl Value {
 
         match self {
             Self::Int(value) => *value < (*rhs).into(),
+            Self::Char(value) => *value < (*rhs).into(),
             Self::Float(value) => *value < (*rhs).into(),
             _ => false,
         }
@@ -178,12 +189,9 @@ impl Value {
         }
 
         match self {
-            Self::Int(value) => {
-                *value > (*rhs).into()
-            }
-            Self::Float(value) => {
-                *value > (*rhs).into()
-            }
+            Self::Int(value) => *value > (*rhs).into(),
+            Self::Char(value) => *value > (*rhs).into(),
+            Self::Float(value) => *value > (*rhs).into(),
             _ => false,
         }
     }

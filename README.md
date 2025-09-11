@@ -14,10 +14,12 @@ My second ever project in Rust. This will become a mini-language called Loxie as
  - NOTE: the compiler only reads sources relative to the `loxie_lib` directory or the invoked-from directory for now.
 
 ### Upcoming Updates
- - Improve error diagnostics (0.4.2)
+ - Improve diagnostics & String support (0.4.2)
    - Check member access by `public / private` specifiers.
- - Support flexible arrays. (0.5.0)
- - Add more standard I/O native functions! (0.5.1)
+   - Fully test `String`.
+ - Replace VM with register VM! (0.5.0)
+ - Support arrays. (0.6.0)
+ - Add more standard I/O native functions! (0.6.1)
  - Improve syntax highlighting on Loxie's local VSCode extension:
    - Add these keywords: `ctor`, `class`, `private`, `public`, `met`
    - Add these typenames: `char`, `varchar`

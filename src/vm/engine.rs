@@ -295,6 +295,7 @@ impl Engine {
     }
 
     fn do_replace(&mut self, target: bytecode::Argument, source: bytecode::Argument) {
+        let target_mode = target.0;
         let target_slot = target.1;
         let incoming_value_opt = self.fetch_value_by(source);
 
@@ -306,23 +307,23 @@ impl Engine {
         let instance_heap_id = self.frames.back().unwrap().opt_instance;
         let has_object_field = target.0 == ArgMode::InstanceFieldId && instance_heap_id != -1;
 
-        if !has_object_field {
-            unsafe {
-                let incoming_value = incoming_value_opt.unwrap_unchecked();
-                *self.stack.get_unchecked_mut(target_slot as usize) = *incoming_value;
-            }
-        } else {
-            if instance_heap_id == -1 {
-                eprintln!("RunWarning: invalid instance reference of -1 fetched!");
-                self.status = ExecStatus::RefError;
-                return;
-            }
-
+        if has_object_field {
             unsafe {
                 let incoming_value_for_field = incoming_value_opt.unwrap_unchecked();
 
                 *self.heap.get_cell_mut(instance_heap_id).unwrap().get_value_mut().try_ref_instance_field_mut(target_slot).unwrap() = *incoming_value_for_field;
             }
+        } else if target_mode == ArgMode::StackOffset {
+            let abs_stack_slot = self.rbp + target_slot;
+
+            unsafe {
+                let incoming_value = incoming_value_opt.unwrap_unchecked();
+                *self.stack.get_unchecked_mut(abs_stack_slot as usize) = *incoming_value;
+            }
+        } else {
+            self.status = ExecStatus::BadArgs;
+            eprintln!("RunError: invalid argument for REPLACE instruction.");
+            return;
         }
 
         self.rip += 1;
@@ -676,15 +677,27 @@ impl Engine {
     }
 
     fn do_instance_call(&mut self, instance_arg: bytecode::Argument, fun_id_arg: bytecode::Argument, args_n: bytecode::Argument) {
-        let instance_ref_stk_slot = self.rbp + instance_arg.1;
-        let instance_heap_id = if let Value::HeapRef(heap_id) = *self.stack.get_mut(instance_ref_stk_slot as usize).unwrap() {
-            heap_id
-        } else { -1 };
+        let instance_heap_id = match instance_arg.0 {
+            ArgMode::StackOffset => {
+                let instance_ref_stk_slot = self.rbp + instance_arg.1;
+
+                if let Value::HeapRef(heap_id) = *self.stack.get_mut(instance_ref_stk_slot as usize).unwrap() { heap_id } else { -1 }
+            },
+            ArgMode::HeapId => {
+                let curr_instance_heap_id = self.frames.back().unwrap().opt_instance;
+                let heap_id_arg = instance_arg.1;
+
+                if curr_instance_heap_id != -1 && heap_id_arg == -1 { curr_instance_heap_id } else { -1 }
+            },
+            _ => -1,
+        };
 
         if instance_heap_id == -1 {
-            eprintln!("RunError: Invalid instance reference found in method call: -1");
             self.status = ExecStatus::RefError;
+            eprintln!("RunError: invalid instance ID found for method call.");
             return;
+        } else {
+            self.heap.get_cell_mut(instance_heap_id).unwrap().inc_rc();
         }
 
         let (proc_arg_mode, proc_id) = fun_id_arg;
@@ -739,6 +752,7 @@ impl Engine {
 
             while !self.is_done() {
                 let next_instr = (&*self.rpp).get_chunk().get_code().get_unchecked(self.rip as usize);
+                // println!("RIP = {}, RBP = {}, RSP = {}", self.rip, self.rbp, self.rsp); // debug
 
                 match next_instr {
                     bytecode::Instruction::Nop => {
@@ -822,6 +836,13 @@ impl Engine {
                 }
 
                 self.try_sweep();
+
+                // debug: dump stack
+                // let stk_n = self.rsp;
+                // for i in 0..stk_n {
+                //     print!("{} ", self.stack.get_mut(i as usize).unwrap());
+                // }
+                // println!();
             }
         }
 

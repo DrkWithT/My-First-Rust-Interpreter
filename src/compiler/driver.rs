@@ -180,10 +180,11 @@ impl<'cml_2> CompilerMain<'cml_2> {
         let mut full_program_ir = full_program_ir_opt.unwrap();
 
         // NOTE: Debug with below calls only!
-        // let temp_bc = self.step_bc_emit(&mut full_program_ir);
-        // disassemble_program(temp_bc.as_ref().unwrap());
-        // temp_bc
+        let temp_bc = self.step_bc_emit(&mut full_program_ir);
+        disassemble_program(temp_bc.as_ref().unwrap());
+        temp_bc
+        // None
 
-        self.step_bc_emit(&mut full_program_ir)
+        // self.step_bc_emit(&mut full_program_ir)
     }
 }

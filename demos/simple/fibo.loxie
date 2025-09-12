@@ -1,5 +1,7 @@
 # recursive fibonacci
 
+import stdio;
+
 fun fib(n: int): int {
     if n < 2 {
         return n;
@@ -9,7 +11,10 @@ fun fib(n: int): int {
 }
 
 fun main(): int {
-    if fib(30) != 832040 {
+    let ans: int = fib(30);
+    print_val(ans);
+
+    if ans != 832040 {
         return 1;
     }
 

@@ -29,7 +29,7 @@ n: | .................. |
 
 ### Sample Object Method Table (class method maps are compile time!)
 - NOTE: These tables map method IDs to offsets of top-level generated functions in the `Program`. Constructors should be first in the method table.
-- NOTE: the `INSTANCE_CALL` instruction will dispatch the corresponding routine to the method while the instance reference is set to the call frame by the VM, allowing valid field accesses.
+- NOTE: the `INST_CALL` instruction will dispatch the corresponding routine to the method while the instance ID is placed in the incoming call frame by the VM, allowing valid field accesses. However, the `INST_CALL` will default to the ID within the immediate parent call frame if the current ID argument equals `-1`.
 ```
 .. | MetTable_x0000 |
 0: | ClassProcedure | (Stack<int>(capacity: int) --> IDX A)

@@ -1,0 +1,49 @@
+# test method calls in methods
+
+import stdio;
+
+class LinearSeq {
+    private let first: int;
+    private let acc: int;
+    private let step: int;
+
+    public ctor(start_arg: int, step_arg: int) {
+        first = start_arg;
+        acc = start_arg;
+        step = step_arg;
+        return 0;
+    }
+
+    public met next(): int {
+        let temp: int = acc;
+        acc = temp + step;
+
+        return temp;
+    }
+
+    public met series(n: int): int {
+        let total: int = 0;
+
+        while n > 0 {
+            total = total + next();
+            n = n - 1;
+        }
+
+        return total;
+    }
+}
+
+fun main(): int {
+    let evens: LinearSeq = LinearSeq(0, 2);
+    # series of 2i, initial-i: 0, sum to 11th
+    let ans: int = evens.series(11);
+
+    print_val("ans: ");
+    print_val(ans);
+
+    if ans != 110 {
+        return 1;
+    }
+
+    return 0;
+}

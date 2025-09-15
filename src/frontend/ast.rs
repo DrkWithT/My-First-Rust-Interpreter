@@ -1,6 +1,6 @@
 use crate::codegen::ir::Locator;
 use crate::frontend::token::{Token, TokenType};
-use crate::semantics::types::{self, ClassAccess};
+use crate::semantics::types::{self, AccessFlag};
 use crate::semantics::scope::SemanticNote;
 
 pub struct ParamDecl {
@@ -518,7 +518,7 @@ impl Stmt for MethodDecl {
     }
 }
 
-pub type ClassMemberDecl = (Box<dyn Stmt>, ClassAccess);
+pub type ClassMemberDecl = (Box<dyn Stmt>, AccessFlag);
 
 pub struct ClassDecl {
     members: Vec<ClassMemberDecl>,

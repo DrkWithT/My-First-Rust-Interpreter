@@ -192,8 +192,10 @@ impl<'b> IREmitter<'b> {
             if let Some(class_layout_ref) = self.class_layouts.get(opt_class_name) {
                 if let Some(field_id) = class_layout_ref.get_member_id(name.to_string()) {
                     return Some((Region::Field, field_id));
-                } else if let Some((_, met_external_id)) = class_layout_ref.get_real_method_id(name.to_string()) {
-                    return Some((Region::Functions, met_external_id));
+                } else if let Some((met_internal_id, met_external_id)) = class_layout_ref.get_real_method_id(name.to_string()) {
+                    return Some(
+                        if self.ctx_instance_locator.1 != -1 { (Region::Functions, met_external_id) } else { (Region::Methods, met_internal_id) }
+                    );
                 }
             }
         }
@@ -551,13 +553,14 @@ impl<'evl3> ExprVisitor<'evl3, Option<Locator>> for IREmitter<'evl3> {
                 ));
             },
             Region::Methods => {
+                // NOTE: See `Runtime.md` notes under the "Sample Object Method Table" section for why -1 is used as a dud instance location.
                 self.emit_step(Instruction::Ternary(
                     Opcode::InstanceCall,
-                    self.ctx_instance_locator.clone(),
+                    if self.ctx_instance_locator.1 != -1 { self.ctx_instance_locator.clone() } else { (Region::ObjectHeap, -1) },
                     (Region::Functions, callee_locator.1),
                     (Region::Immediate, passed_arity),
                 ));
-            }
+            },
             _ => {
                 return None;
             }

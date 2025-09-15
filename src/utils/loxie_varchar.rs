@@ -44,7 +44,7 @@ pub fn native_intrin_varchar_get(engine_ref: &mut Engine) -> ExecStatus {
 
     engine_ref.push_in(Value::Char(vc_item));
 
-    ExecStatus::NotOk
+    ExecStatus::Ok
 }
 
 pub fn native_intrin_varchar_set(engine_ref: &mut Engine) -> ExecStatus {
@@ -69,7 +69,7 @@ pub fn native_intrin_varchar_set(engine_ref: &mut Engine) -> ExecStatus {
 
     engine_ref.push_in(Value::Bool(result_flag));
 
-    ExecStatus::NotOk
+    ExecStatus::Ok
 }
 
 pub fn native_intrin_varchar_push(engine_ref: &mut Engine) -> ExecStatus {
@@ -93,7 +93,7 @@ pub fn native_intrin_varchar_push(engine_ref: &mut Engine) -> ExecStatus {
 
     engine_ref.push_in(Value::Bool(result_flag));
 
-    ExecStatus::NotOk
+    ExecStatus::Ok
 }
 
 pub fn native_intrin_varchar_pop(engine_ref: &mut Engine) -> ExecStatus {
@@ -116,5 +116,5 @@ pub fn native_intrin_varchar_pop(engine_ref: &mut Engine) -> ExecStatus {
 
     engine_ref.push_in(Value::Char(vc_item));
 
-    ExecStatus::NotOk
+    ExecStatus::Ok
 }

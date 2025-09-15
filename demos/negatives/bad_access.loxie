@@ -1,0 +1,21 @@
+# test checks for bad member accesses
+
+class Foo {
+    private let x: int;
+
+    public ctor(arg: int) {
+        x = arg;
+        return 0;
+    }
+
+    private met hidden_get(): int {
+        return x;
+    }
+}
+
+fun main(): int {
+    let foo: Foo = Foo(69);
+    let foo_val: int = foo.hidden_get();
+
+    return 0;
+}

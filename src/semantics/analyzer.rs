@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::frontend::token::*;
 use crate::frontend::ast::*;
 use crate::semantics::scope::*;
-use crate::semantics::types::{ClassAccess, OperatorTag, ValueCategoryTag};
+use crate::semantics::types::{AccessFlag, OperatorTag, ValueCategoryTag};
 use crate::semantics::blueprint::*;
 
 const BOOLEAN_TYPE_ID_N: i32 = 0;
@@ -83,7 +83,10 @@ pub struct Analyzer {
     current_class_id: i32,
 
     /// **NOTE:** Indicates the current access modifier of a visiting member decl. in the currently visited class.
-    current_class_mod: ClassAccess,
+    current_class_mod: AccessFlag,
+
+    /// **NOTE:** Indicates whether the currently referenced name of a member / variable / function is scope visible.
+    current_name_accessible: AccessFlag,
 
     /// **NOTE:** Indicates that top-level decls. must be recorded before body processing. If `false`, body processing takes place instead.
     prepass_flag: bool,
@@ -112,7 +115,8 @@ impl Analyzer {
             scopes: ScopeStack::default(),
             source_str: source_view,
             current_class_id: -1,
-            current_class_mod: ClassAccess::Private,
+            current_class_mod: AccessFlag::Hidden,
+            current_name_accessible: AccessFlag::Hidden,
             prepass_flag: true,
         }
     }
@@ -136,7 +140,7 @@ impl Analyzer {
         self.current_class_id = cid;
     }
 
-    pub fn update_current_class_mod(&mut self, access_mod: ClassAccess) {
+    pub fn update_current_class_mod(&mut self, access_mod: AccessFlag) {
         self.current_class_mod = access_mod;
     }
 
@@ -177,17 +181,18 @@ impl Analyzer {
 
     fn lookup_name_info(&mut self, name: &str) -> SemanticNote {
         if self.current_class_id != -1 {
-            // println!("class-based name lookup...");
-
             if let Some(bp_ref) = self.class_blueprints.try_get_entry_mut(self.current_class_id) {
                 if let Some(bp_ref_member_ref) = bp_ref.try_get_entry_mut(name) {
-                    return bp_ref_member_ref.note.clone();
+                    self.current_name_accessible = bp_ref_member_ref.0;
+                    return bp_ref_member_ref.1.note.clone();
                 }
             }
         }
 
-        // println!("normal name lookup...");
-        self.scopes.lookup_name_info(name)
+        let normal_info = self.scopes.lookup_name_info(name);
+        self.current_name_accessible = if normal_info.is_dud() { AccessFlag::Hidden } else { AccessFlag::Exposed };
+
+        normal_info
     }
 
     fn record_name_info(&mut self, name: &str, info: SemanticNote, mode: RecordInfoMode) -> bool {
@@ -200,7 +205,7 @@ impl Analyzer {
         }
     }
 
-    fn record_class_member_info(&mut self, class_id: i32, name: &str, access_mod_arg: ClassAccess, note_arg: SemanticNote) -> bool {
+    fn record_class_member_info(&mut self, class_id: i32, name: &str, access_mod_arg: AccessFlag, note_arg: SemanticNote) -> bool {
         let class_bp_ref_opt = self.class_blueprints.try_get_entry_mut(class_id);
 
         if class_bp_ref_opt.is_none() {
@@ -272,7 +277,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
         let callable_info_opt_2: Option<RawMethodCallable> = if callable_info_opt_1.is_none() { callee_info.try_unbox_method_info() } else { None };
 
         if callable_info_opt_1.is_none() && callable_info_opt_2.is_none() {
-            self.report_culprit_error(&callee_token, "The callee name is a non-callable type- Not a procedure, method, or lambda.");
+            self.report_culprit_error(&callee_token, "The callee is a non-callable entity OR an inaccessible member.");
             SemanticNote::Dud
         } else if callable_info_opt_1.is_some() {
             let proc_or_ctor_info = callable_info_opt_1.unwrap();
@@ -399,6 +404,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
     fn visit_binary(&mut self, e: &Binary) -> SemanticNote {
         let expr_op = e.get_operator();
         let lhs_info = e.get_lhs().accept_visitor_sema(self);
+        let lhs_accessibility = self.current_name_accessible;
         let expr_line_no = self.temp_token.line_no;
 
         if expr_op == OperatorTag::Access && self.current_class_id == -1 {
@@ -408,6 +414,7 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
         }
 
         let rhs_info = e.get_rhs().accept_visitor_sema(self);
+        let rhs_accessibility = self.current_name_accessible;
 
         if expr_op.is_homogeneously_typed() {
             if !check_binary_typing_homogeneously(&lhs_info, &rhs_info) {
@@ -417,7 +424,16 @@ impl<'evl2> ExprVisitor<'evl2, SemanticNote> for Analyzer{
                 return SemanticNote::Dud;
             }
         } else if expr_op == OperatorTag::Access {
-            return rhs_info;
+            return if rhs_info.is_dud() || lhs_accessibility == AccessFlag::Hidden || rhs_accessibility == AccessFlag::Hidden {
+                let class_type_id = self.current_class_id;
+                let class_name = if self.current_class_id != -1 {
+                    self.type_table.get(&class_type_id).unwrap().as_str()
+                } else { "(unknown-type)" };
+                let bad_member_access_msg = format!("Cannot access member of {class_name} by name around Ln. {expr_line_no}");
+                self.report_plain_error(bad_member_access_msg.as_str());
+
+                SemanticNote::Dud
+            } else { rhs_info };
         } else {
             let unsupported_operator_msg = format!("Unsupported operator found around Ln. {}: {}", expr_line_no, expr_op.as_symbol());
             self.report_plain_error(unsupported_operator_msg.as_str());
@@ -549,6 +565,7 @@ impl StmtVisitor<bool> for Analyzer {
             let field_type_id = self.record_type(field_typename.clone());
             let field_name_str = s.get_name_token().to_lexeme_str(&src_copy).unwrap_or("");
 
+            println!("recording field '{field_name_str}'...");
             self.record_name_info(field_name_str, SemanticNote::DataValue(field_type_id, ValueCategoryTag::Identity), RecordInfoMode::Member);
         }
 
@@ -585,8 +602,8 @@ impl StmtVisitor<bool> for Analyzer {
                 return false;
             }
 
-            if !self.record_name_info(ctor_class_name.as_str(), SemanticNote::Callable(ctor_param_type_ids, ctor_class_id, ctor_arity), RecordInfoMode::Global) {
-                let top_ctor_decl_fail_msg = format!("Failed to record constructor at top-level for class '{}'", ctor_class_name.as_str());
+            if ctor_access_mod == AccessFlag::Hidden || !self.record_name_info(ctor_class_name.as_str(), SemanticNote::Callable(ctor_param_type_ids, ctor_class_id, ctor_arity), RecordInfoMode::Global) {
+                let top_ctor_decl_fail_msg = format!("Failed to record constructor at top-level for class '{}'\n\tNote: constructors must be public.", ctor_class_name.as_str());
                 self.report_plain_error(&top_ctor_decl_fail_msg);
 
                 return false;
@@ -659,7 +676,7 @@ impl StmtVisitor<bool> for Analyzer {
             }
 
             if !self.record_name_info(met_name, SemanticNote::Method(met_param_types, met_ret_type_id, met_arity, self.current_class_id), RecordInfoMode::Member) {
-                let redef_fun_msg = format!("Invalid redeclaration of procedure '{met_name}'");
+                let redef_fun_msg = format!("Invalid redeclaration of method '{met_name}'");
                 self.report_plain_error(redef_fun_msg.as_str());
 
                 return false;

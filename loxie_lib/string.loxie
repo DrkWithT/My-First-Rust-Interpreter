@@ -34,7 +34,9 @@ class String {
 
     # Appends a single char and returns true if OK
     public met append_char(c: char): bool {
-        if intrin_varchar_push(data, c) {
+        let data_ref: varchar = data;
+
+        if intrin_varchar_push(data_ref, c) {
             return true;
         }
 
@@ -42,8 +44,10 @@ class String {
     }
 
     public met pop_char(): char {
-        if length() > 0 {
-            return intrin_varchar_pop(data);
+        let data_ref: varchar = data;
+
+        if intrin_varchar_len(data_ref) > 0 {
+            return intrin_varchar_pop(data_ref);
         }
 
         return '\0';
@@ -51,11 +55,12 @@ class String {
 
     # zeroes the buffer of a String, returning false on error
     public met clear(): bool {
+        let data_ref: varchar = data;
         let char_n: int = length();
         let data_i: int = 0;
 
         while data_i < char_n {
-            if set(data_i, '\0') {
+            if intrin_varchar_set(data_ref, data_i, '\0') {
                 data_i = data_i + 1;
             } else {
                 return false;
